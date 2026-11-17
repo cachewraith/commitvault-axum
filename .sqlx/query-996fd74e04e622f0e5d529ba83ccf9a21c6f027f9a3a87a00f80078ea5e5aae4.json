@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH bounds AS (SELECT (now() AT TIME ZONE 'utc')::date AS today),\n                days AS (SELECT generate_series(today - ($1::int - 1), today, interval '1 day')::date AS day FROM bounds),\n                agg AS (SELECT (d.deployed_at AT TIME ZONE 'utc')::date AS day, d.status, count(*) AS n\n                        FROM deployments d, bounds\n                        WHERE d.deployed_at >= (bounds.today - $1::int)::timestamp AT TIME ZONE 'utc'\n                        GROUP BY 1, 2)\n           SELECT days.day AS \"date!\",\n                  coalesce(sum(agg.n) FILTER (WHERE agg.status = 'successful'), 0)::bigint AS \"successful!\",\n                  coalesce(sum(agg.n) FILTER (WHERE agg.status = 'failed'), 0)::bigint AS \"failed!\",\n                  coalesce(sum(agg.n) FILTER (WHERE agg.status = 'rolled_back'), 0)::bigint AS \"rolled_back!\",\n                  coalesce(sum(agg.n) FILTER (WHERE agg.status = 'pending'), 0)::bigint AS \"pending!\"\n           FROM days LEFT JOIN agg ON agg.day = days.day\n           GROUP BY days.day ORDER BY days.day",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date!",
+        "type_info": "Date",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "successful!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "rolled_back!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "pending!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "996fd74e04e622f0e5d529ba83ccf9a21c6f027f9a3a87a00f80078ea5e5aae4"
+}

@@ -1,0 +1,7047 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CommitVault API",
+    "description": "REST API of CommitVault, a personal workspace for recording commits, deployments, environments, releases and technical notes.\n\nAll endpoints except `/health`, `/auth/csrf`, `/auth/login` and `/auth/logout` require the session cookie. Every POST, PUT, PATCH and DELETE request must also send the session's CSRF token in the `X-CSRF-Token` header.",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/csrf": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Get a CSRF token",
+        "description": "Returns the CSRF token bound to the current session, creating an anonymous\nsession if there is none. Required before the first state-changing request\n(including login).",
+        "operationId": "csrf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_CsrfTokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign in",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many failed attempts; see `Retry-After`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out",
+        "description": "Invalidates the server-side session and clears the cookie.",
+        "operationId": "logout",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Current session",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change password",
+        "description": "Revokes every other session of the account.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/commits": {
+      "get": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "List commits across projects",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches message, description, branch, author and hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "description": "Exact branch name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "description": "Hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "description": "Commits dated at or after this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "description": "Commits dated at or before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "deployment_status",
+            "in": "query",
+            "description": "Filter by recorded deployments (optionally scoped by `environment_id`).",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CommitDeploymentFilter"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Only consider deployment records of this environment. On its own it\nselects commits with at least one record there.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "release_id",
+            "in": "query",
+            "description": "Commits associated with this release.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CommitSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_CommitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/commits/{id}": {
+      "get": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "Get a commit",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commit id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_CommitResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "Delete a commit",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commit id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "description": "Also delete the commit's deployment records. Without it, deleting a\ncommit that has deployment history fails with 409.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Has deployment records and `cascade` was not set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "Update a commit",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Commit id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_CommitResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Workspace overview",
+        "description": "Totals, recent activity and the latest recorded deployment per environment.",
+        "operationId": "overview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_DashboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deployments": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "List deployment records across projects",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commit_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DeploymentStatus"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "description": "Deployed at or after this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "description": "Deployed at or before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches title, notes, commit message and commit hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DeploymentSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_DeploymentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deployments/{id}": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Get a deployment record",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_DeploymentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Delete a deployment record",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Update a deployment record",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Deployment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeploymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_DeploymentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/environments": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "List environments across projects",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches environment name and server label.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_EnvironmentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/environments/{id}": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Get an environment",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Delete an environment",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "description": "Also delete the deployment records of this environment. Without it,\ndeleting an environment that has deployment history fails with 409.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Has deployment records and `cascade` was not set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Update an environment",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Environment id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Liveness and database connectivity",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notes": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "List notes",
+        "description": "Pinned notes come first. The document body is not included; fetch a\nsingle note for that.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "global",
+            "in": "query",
+            "description": "`true` selects only global notes (those without a project).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Exact category.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches title, category and note text.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NoteSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_NoteResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Create a note",
+        "description": "Set `project_id` to attach it to a project, omit it for a global note.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_NoteDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notes/categories": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "List note categories in use",
+        "operationId": "categories",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_Vec_NoteCategory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notes/{id}": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Get a note with its document",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Note id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_NoteDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Delete a note",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Note id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Update a note",
+        "description": "Partial update, also used by the editor's autosave. The document is\nvalidated against the supported rich-text schema.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Note id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_NoteDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "List projects",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches name, slug and description.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectStatus"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ProjectSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_ProjectResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a project",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ProjectResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Slug already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Get a project",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ProjectResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Delete a project",
+        "description": "Permanently removes the project together with its environments, commits,\ndeployments, releases and project notes.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Update or archive a project",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ProjectResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/branches": {
+      "get": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "List a project's branch names",
+        "description": "Distinct branches seen on recorded commits, most recently used first\n(for autocompletion and filters).",
+        "operationId": "branches",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_Vec_BranchSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/commits": {
+      "get": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "List a project's commits",
+        "description": "Same filters as `GET /commits`; `project_id` is taken from the path.",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches message, description, branch, author and hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "description": "Exact branch name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "description": "Hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "description": "Commits dated at or after this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "description": "Commits dated at or before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "deployment_status",
+            "in": "query",
+            "description": "Filter by recorded deployments (optionally scoped by `environment_id`).",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CommitDeploymentFilter"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "description": "Only consider deployment records of this environment. On its own it\nselects commits with at least one record there.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "release_id",
+            "in": "query",
+            "description": "Commits associated with this release.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CommitSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_CommitResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "commits"
+        ],
+        "summary": "Record a commit",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_CommitResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Hash already recorded for this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/deployments": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "List a project's deployment history",
+        "description": "Same filters as `GET /deployments`; `project_id` is taken from the path.",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "environment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commit_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DeploymentStatus"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "description": "Deployed at or after this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "description": "Deployed at or before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches title, notes, commit message and commit hash prefix.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/DeploymentSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_DeploymentResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Record a deployment",
+        "description": "Stores the fact that a commit was deployed to an environment. Nothing is\nexecuted or verified against any server.",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeploymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_DeploymentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, or environment/commit of another project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/deployments/compare": {
+      "get": {
+        "tags": [
+          "deployments"
+        ],
+        "summary": "Compare the recorded deployments of two environments",
+        "description": "Lists commits recorded in one environment, the other, or both. This is a\ncomparison of records only: it does not establish that a commit is absent\nfrom an environment, nor that one environment is ahead of or behind another.",
+        "operationId": "compare",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "description": "First environment.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "description": "Second environment.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "include_unsuccessful",
+            "in": "query",
+            "description": "Count records of every status instead of only `successful` ones.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_EnvironmentComparison"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/environments": {
+      "get": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "List a project's environments",
+        "description": "Returned in display order, each with its latest recorded deployment.",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_Vec_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Create an environment",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEnvironmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already used in this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/environments/order": {
+      "put": {
+        "tags": [
+          "environments"
+        ],
+        "summary": "Reorder a project's environments",
+        "operationId": "reorder",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderEnvironmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_Vec_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/notes": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "List a project's notes",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "global",
+            "in": "query",
+            "description": "`true` selects only global notes (those without a project).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Exact category.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches title, category and note text.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NoteSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_NoteResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "Create a note in a project",
+        "operationId": "create_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_NoteDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/releases": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "List a project's releases",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReleaseStatus"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches version, title, description and release-note text.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commit_id",
+            "in": "query",
+            "description": "Releases that include this commit.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReleaseSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_ReleaseResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Create a release",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReleaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ReleaseDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version already used in this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/releases": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "List releases across projects",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReleaseStatus"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches version, title, description and release-note text.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commit_id",
+            "in": "query",
+            "description": "Releases that include this commit.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReleaseSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_ReleaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/releases/{id}": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Get a release with its notes and commits",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Release id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ReleaseDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Delete a release",
+        "description": "The associated commits are kept; only the association is removed.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Release id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Update a release",
+        "description": "`commit_ids` and `tag_ids`, when present, replace the current sets.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Release id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReleaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_ReleaseDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search everything",
+        "description": "Searches projects, commits (message, branch, author, hash prefix),\ndeployments, releases, notes (including their text) and tags.",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search term (2–100 characters).",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "description": "Restrict results to one project (tags are always global).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum hits per record type (default 5, maximum 20).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "List tags",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive match on the tag name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TagSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_TagResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Create a tag",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_TagResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A tag with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tags/{id}": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Get a tag",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_TagResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Delete a tag",
+        "description": "Detaches the tag from every record; the records themselves are untouched.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Update a tag",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tag id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTagRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_TagResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BranchSummary": {
+        "type": "object",
+        "required": [
+          "name",
+          "commit_count",
+          "last_commit_at"
+        ],
+        "properties": {
+          "commit_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_commit_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitBrief": {
+        "type": "object",
+        "required": [
+          "id",
+          "short_hash",
+          "commit_hash",
+          "commit_message",
+          "branch_name",
+          "commit_date"
+        ],
+        "properties": {
+          "branch_name": {
+            "type": "string"
+          },
+          "commit_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commit_hash": {
+            "type": "string"
+          },
+          "commit_message": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "short_hash": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitDeploymentFilter": {
+        "type": "string",
+        "description": "Filter on *recorded* deployments. `none` means \"no deployment record\nexists\", which is not proof that the commit was never deployed.",
+        "enum": [
+          "any",
+          "none",
+          "successful",
+          "failed",
+          "rolled_back",
+          "pending"
+        ]
+      },
+      "CommitEnvironment": {
+        "type": "object",
+        "description": "Summary of the deployment records of one commit in one environment.",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "color",
+          "deployment_count",
+          "latest_status",
+          "latest_deployed_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "latest_deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latest_status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project",
+          "branch_name",
+          "commit_hash",
+          "short_hash",
+          "commit_message",
+          "commit_date",
+          "created_at",
+          "updated_at",
+          "tags",
+          "deployment_count",
+          "environments",
+          "releases"
+        ],
+        "properties": {
+          "author_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branch_name": {
+            "type": "string"
+          },
+          "commit_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commit_hash": {
+            "type": "string"
+          },
+          "commit_message": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total number of deployment records for this commit."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitEnvironment"
+            },
+            "description": "Environments with at least one deployment record for this commit."
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRef"
+            },
+            "description": "Releases this commit is associated with."
+          },
+          "short_hash": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CommitSort": {
+        "type": "string",
+        "enum": [
+          "commit_date",
+          "created_at",
+          "branch_name"
+        ]
+      },
+      "ComparedCommit": {
+        "type": "object",
+        "required": [
+          "commit",
+          "deployment_count",
+          "last_deployed_at"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/components/schemas/CommitBrief"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ComparisonCounts": {
+        "type": "object",
+        "required": [
+          "only_in_base",
+          "only_in_target",
+          "in_both"
+        ],
+        "properties": {
+          "in_both": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "only_in_base": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "only_in_target": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ComparisonSide": {
+        "type": "object",
+        "required": [
+          "environment",
+          "recorded_commit_count"
+        ],
+        "properties": {
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentRef"
+          },
+          "latest_deployment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentBrief",
+                "description": "Latest record among the considered statuses."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recorded_commit_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Distinct commits with a considered record in this environment."
+          }
+        }
+      },
+      "CreateCommitRequest": {
+        "type": "object",
+        "required": [
+          "branch_name",
+          "commit_hash",
+          "commit_message",
+          "commit_date"
+        ],
+        "properties": {
+          "author_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branch_name": {
+            "type": "string"
+          },
+          "commit_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commit_hash": {
+            "type": "string",
+            "description": "Full or abbreviated hash: 7–64 hex characters (stored lower-case)."
+          },
+          "commit_message": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Link to the commit on the Git host (http/https only)."
+          },
+          "short_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Defaults to the first 7 characters of `commit_hash`."
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "CreateDeploymentRequest": {
+        "type": "object",
+        "required": [
+          "environment_id",
+          "commit_id",
+          "deployment_title"
+        ],
+        "properties": {
+          "commit_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Must belong to the project in the path."
+          },
+          "deployed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Defaults to the current time."
+          },
+          "deployment_notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Plain text: what changed, commands to run, migration steps. Stored as\ndocumentation only — CommitVault never executes anything."
+          },
+          "deployment_title": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Must belong to the project in the path."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentStatus",
+                "description": "Defaults to `successful`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "CreateEnvironmentRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`#rrggbb` used for badges. Defaults to a neutral grey."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "server_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-form label of the server or cluster, e.g. `vps-eu-1`."
+          }
+        }
+      },
+      "CreateNoteRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_json": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Tiptap JSON document. Defaults to an empty document."
+          },
+          "is_pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Omit (or `null`) for a global note."
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateProjectRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "default_branch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Defaults to `main`."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "repository_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL-friendly identifier. Generated from the name when omitted."
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "CreateReleaseRequest": {
+        "type": "object",
+        "required": [
+          "version",
+          "title"
+        ],
+        "properties": {
+          "commit_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Commits of the same project to associate with the release."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "release_notes": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Tiptap JSON document."
+          },
+          "released_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseStatus",
+                "description": "Defaults to `draft`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "description": "Free-form version label. Semantic versions (`1.4.0`) are supported but\nnot required; it only has to be unique inside the project."
+          }
+        }
+      },
+      "CreateTagRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`#rrggbb`. Defaults to a neutral grey."
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CsrfTokenResponse": {
+        "type": "object",
+        "required": [
+          "csrf_token"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          }
+        }
+      },
+      "DailyDeployments": {
+        "type": "object",
+        "required": [
+          "date",
+          "successful",
+          "failed",
+          "rolled_back",
+          "pending"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pending": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rolled_back": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successful": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DashboardResponse": {
+        "type": "object",
+        "required": [
+          "totals",
+          "recent_deployments",
+          "recent_commits",
+          "recent_notes",
+          "project_activity",
+          "environment_overview",
+          "deployment_activity"
+        ],
+        "properties": {
+          "deployment_activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyDeployments"
+            },
+            "description": "Deployment records per UTC day for the last 30 days (oldest first)."
+          },
+          "environment_overview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentResponse"
+            },
+            "description": "Environments of active projects with their latest recorded deployment,\nmost recently deployed first."
+          },
+          "project_activity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectActivity"
+            },
+            "description": "Active projects ordered by their latest activity."
+          },
+          "recent_commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitResponse"
+            },
+            "description": "Most recently dated commits."
+          },
+          "recent_deployments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentResponse"
+            },
+            "description": "Latest deployment records, newest first."
+          },
+          "recent_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NoteResponse"
+            },
+            "description": "Most recently edited notes."
+          },
+          "totals": {
+            "$ref": "#/components/schemas/DashboardTotals"
+          }
+        }
+      },
+      "DashboardTotals": {
+        "type": "object",
+        "required": [
+          "projects",
+          "active_projects",
+          "commits",
+          "environments",
+          "deployments",
+          "releases",
+          "notes",
+          "tags"
+        ],
+        "properties": {
+          "active_projects": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "commits": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deployments": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "environments": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "projects": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "releases": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tags": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Data_CommitResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "project_id",
+              "project",
+              "branch_name",
+              "commit_hash",
+              "short_hash",
+              "commit_message",
+              "commit_date",
+              "created_at",
+              "updated_at",
+              "tags",
+              "deployment_count",
+              "environments",
+              "releases"
+            ],
+            "properties": {
+              "author_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "branch_name": {
+                "type": "string"
+              },
+              "commit_date": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "commit_hash": {
+                "type": "string"
+              },
+              "commit_message": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deployment_count": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Total number of deployment records for this commit."
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "environments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommitEnvironment"
+                },
+                "description": "Environments with at least one deployment record for this commit."
+              },
+              "external_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ProjectRef"
+              },
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "releases": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReleaseRef"
+                },
+                "description": "Releases this commit is associated with."
+              },
+              "short_hash": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TagRef"
+                }
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Data_CsrfTokenResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "csrf_token"
+            ],
+            "properties": {
+              "csrf_token": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Data_DashboardResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "totals",
+              "recent_deployments",
+              "recent_commits",
+              "recent_notes",
+              "project_activity",
+              "environment_overview",
+              "deployment_activity"
+            ],
+            "properties": {
+              "deployment_activity": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DailyDeployments"
+                },
+                "description": "Deployment records per UTC day for the last 30 days (oldest first)."
+              },
+              "environment_overview": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                },
+                "description": "Environments of active projects with their latest recorded deployment,\nmost recently deployed first."
+              },
+              "project_activity": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ProjectActivity"
+                },
+                "description": "Active projects ordered by their latest activity."
+              },
+              "recent_commits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommitResponse"
+                },
+                "description": "Most recently dated commits."
+              },
+              "recent_deployments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                },
+                "description": "Latest deployment records, newest first."
+              },
+              "recent_notes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                },
+                "description": "Most recently edited notes."
+              },
+              "totals": {
+                "$ref": "#/components/schemas/DashboardTotals"
+              }
+            }
+          }
+        }
+      },
+      "Data_DeploymentResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "project_id",
+              "project",
+              "environment",
+              "commit",
+              "deployment_title",
+              "deployed_at",
+              "status",
+              "created_at",
+              "updated_at",
+              "tags"
+            ],
+            "properties": {
+              "commit": {
+                "$ref": "#/components/schemas/CommitBrief"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deployed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deployment_notes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "deployment_title": {
+                "type": "string"
+              },
+              "environment": {
+                "$ref": "#/components/schemas/EnvironmentRef"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ProjectRef"
+              },
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "$ref": "#/components/schemas/DeploymentStatus"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TagRef"
+                }
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Data_EnvironmentComparison": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Side-by-side view of the deployment *records* of two environments.",
+            "required": [
+              "base",
+              "target",
+              "statuses_considered",
+              "counts",
+              "only_in_base",
+              "only_in_target",
+              "in_both",
+              "truncated",
+              "notice"
+            ],
+            "properties": {
+              "base": {
+                "$ref": "#/components/schemas/ComparisonSide"
+              },
+              "counts": {
+                "$ref": "#/components/schemas/ComparisonCounts"
+              },
+              "in_both": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SharedCommit"
+                },
+                "description": "Commits with a record in both environments."
+              },
+              "notice": {
+                "type": "string",
+                "description": "How to read this comparison; shown verbatim in the UI."
+              },
+              "only_in_base": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ComparedCommit"
+                },
+                "description": "Commits with a record in `base` and none in `target`."
+              },
+              "only_in_target": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ComparedCommit"
+                },
+                "description": "Commits with a record in `target` and none in `base`."
+              },
+              "statuses_considered": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/DeploymentStatus"
+                },
+                "description": "Statuses that were taken into account."
+              },
+              "target": {
+                "$ref": "#/components/schemas/ComparisonSide"
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "`true` when the commit lists were cut off at the row limit\n(`counts` always reflects the full result)."
+              }
+            }
+          }
+        }
+      },
+      "Data_EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "project_id",
+              "project",
+              "name",
+              "slug",
+              "color",
+              "position",
+              "created_at",
+              "updated_at",
+              "deployment_count"
+            ],
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deployment_count": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Number of deployment records for this environment."
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "latest_deployment": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DeploymentBrief",
+                    "description": "Most recent recorded deployment of any status."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "latest_successful_deployment": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/DeploymentBrief",
+                    "description": "Most recent recorded deployment with status `successful`."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "position": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ProjectRef"
+              },
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "server_label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Data_HealthResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Data_NoteDetailResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NoteResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "content_json"
+                ],
+                "properties": {
+                  "content_json": {
+                    "type": "object",
+                    "description": "Tiptap JSON document."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "Data_ProjectResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "default_branch",
+              "status",
+              "created_at",
+              "updated_at",
+              "tags",
+              "stats"
+            ],
+            "properties": {
+              "archived_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "default_branch": {
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "repository_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "slug": {
+                "type": "string"
+              },
+              "stats": {
+                "$ref": "#/components/schemas/ProjectStats"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ProjectStatus"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TagRef"
+                }
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Data_ReleaseDetailResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "commits"
+                ],
+                "properties": {
+                  "commits": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/CommitBrief"
+                    },
+                    "description": "Associated commits, newest first."
+                  },
+                  "release_notes": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "Tiptap JSON document."
+                  }
+                }
+              }
+            ],
+            "description": "A release with its notes and associated commits."
+          }
+        }
+      },
+      "Data_SearchResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Hits grouped by record type, each group capped at `limit`.",
+            "required": [
+              "query",
+              "projects",
+              "commits",
+              "deployments",
+              "releases",
+              "notes",
+              "tags",
+              "total"
+            ],
+            "properties": {
+              "commits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "deployments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "notes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "query": {
+                "type": "string"
+              },
+              "releases": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SearchHit"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "description": "Number of hits returned across all groups.",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "Data_SessionResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "user",
+              "csrf_token"
+            ],
+            "properties": {
+              "csrf_token": {
+                "type": "string",
+                "description": "Send this value in the `X-CSRF-Token` header of every state-changing request."
+              },
+              "user": {
+                "$ref": "#/components/schemas/UserResponse"
+              }
+            }
+          }
+        }
+      },
+      "Data_TagResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "color",
+              "created_at",
+              "updated_at",
+              "usage"
+            ],
+            "properties": {
+              "color": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "usage": {
+                "$ref": "#/components/schemas/TagUsage"
+              }
+            }
+          }
+        }
+      },
+      "Data_Vec_BranchSummary": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "commit_count",
+                "last_commit_at"
+              ],
+              "properties": {
+                "commit_count": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "last_commit_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Data_Vec_EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "name",
+                "slug",
+                "color",
+                "position",
+                "created_at",
+                "updated_at",
+                "deployment_count"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deployment_count": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Number of deployment records for this environment."
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "latest_deployment": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeploymentBrief",
+                      "description": "Most recent recorded deployment of any status."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "latest_successful_deployment": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeploymentBrief",
+                      "description": "Most recent recorded deployment with status `successful`."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "server_label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Data_Vec_NoteCategory": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "category",
+                "note_count"
+              ],
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "note_count": {
+                  "type": "integer",
+                  "format": "int64"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DeploymentBrief": {
+        "type": "object",
+        "description": "The essentials of one recorded deployment.",
+        "required": [
+          "id",
+          "deployment_title",
+          "status",
+          "deployed_at",
+          "commit"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/components/schemas/CommitBrief"
+          },
+          "deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deployment_title": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          }
+        }
+      },
+      "DeploymentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project",
+          "environment",
+          "commit",
+          "deployment_title",
+          "deployed_at",
+          "status",
+          "created_at",
+          "updated_at",
+          "tags"
+        ],
+        "properties": {
+          "commit": {
+            "$ref": "#/components/schemas/CommitBrief"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deployment_notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deployment_title": {
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/EnvironmentRef"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeploymentStatus"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DeploymentSort": {
+        "type": "string",
+        "enum": [
+          "deployed_at",
+          "created_at"
+        ]
+      },
+      "DeploymentStatus": {
+        "type": "string",
+        "enum": [
+          "successful",
+          "failed",
+          "rolled_back",
+          "pending"
+        ]
+      },
+      "EnvironmentComparison": {
+        "type": "object",
+        "description": "Side-by-side view of the deployment *records* of two environments.",
+        "required": [
+          "base",
+          "target",
+          "statuses_considered",
+          "counts",
+          "only_in_base",
+          "only_in_target",
+          "in_both",
+          "truncated",
+          "notice"
+        ],
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/ComparisonSide"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ComparisonCounts"
+          },
+          "in_both": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SharedCommit"
+            },
+            "description": "Commits with a record in both environments."
+          },
+          "notice": {
+            "type": "string",
+            "description": "How to read this comparison; shown verbatim in the UI."
+          },
+          "only_in_base": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparedCommit"
+            },
+            "description": "Commits with a record in `base` and none in `target`."
+          },
+          "only_in_target": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComparedCommit"
+            },
+            "description": "Commits with a record in `target` and none in `base`."
+          },
+          "statuses_considered": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentStatus"
+            },
+            "description": "Statuses that were taken into account."
+          },
+          "target": {
+            "$ref": "#/components/schemas/ComparisonSide"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "`true` when the commit lists were cut off at the row limit\n(`counts` always reflects the full result)."
+          }
+        }
+      },
+      "EnvironmentRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "color"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project",
+          "name",
+          "slug",
+          "color",
+          "position",
+          "created_at",
+          "updated_at",
+          "deployment_count"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of deployment records for this environment."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "latest_deployment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentBrief",
+                "description": "Most recent recorded deployment of any status."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_successful_deployment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentBrief",
+                "description": "Most recent recorded deployment with status `successful`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "server_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code, e.g. `validation_failed`."
+          },
+          "details": {
+            "type": "object",
+            "description": "Per-field problems (validation and attributable conflicts)."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary, safe to display."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Error envelope returned for every non-2xx response.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "description": "Not trimmed: whitespace can be part of a passphrase."
+          }
+        }
+      },
+      "NoteCategory": {
+        "type": "object",
+        "required": [
+          "category",
+          "note_count"
+        ],
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "note_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "NoteDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/NoteResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "content_json"
+            ],
+            "properties": {
+              "content_json": {
+                "type": "object",
+                "description": "Tiptap JSON document."
+              }
+            }
+          }
+        ]
+      },
+      "NoteResponse": {
+        "type": "object",
+        "description": "A note without its document body (list views).",
+        "required": [
+          "id",
+          "title",
+          "excerpt",
+          "is_pinned",
+          "created_at",
+          "updated_at",
+          "tags"
+        ],
+        "properties": {
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Plain-text preview of the content."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_pinned": {
+            "type": "boolean"
+          },
+          "project": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NoteSort": {
+        "type": "string",
+        "enum": [
+          "updated_at",
+          "created_at",
+          "title"
+        ]
+      },
+      "PageMeta": {
+        "type": "object",
+        "required": [
+          "page",
+          "per_page",
+          "total",
+          "total_pages"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Paginated_CommitResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "branch_name",
+                "commit_hash",
+                "short_hash",
+                "commit_message",
+                "commit_date",
+                "created_at",
+                "updated_at",
+                "tags",
+                "deployment_count",
+                "environments",
+                "releases"
+              ],
+              "properties": {
+                "author_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "branch_name": {
+                  "type": "string"
+                },
+                "commit_date": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "commit_hash": {
+                  "type": "string"
+                },
+                "commit_message": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deployment_count": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Total number of deployment records for this commit."
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "environments": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommitEnvironment"
+                  },
+                  "description": "Environments with at least one deployment record for this commit."
+                },
+                "external_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "releases": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReleaseRef"
+                  },
+                  "description": "Releases this commit is associated with."
+                },
+                "short_hash": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  }
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_DeploymentResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "environment",
+                "commit",
+                "deployment_title",
+                "deployed_at",
+                "status",
+                "created_at",
+                "updated_at",
+                "tags"
+              ],
+              "properties": {
+                "commit": {
+                  "$ref": "#/components/schemas/CommitBrief"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deployed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deployment_notes": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "deployment_title": {
+                  "type": "string"
+                },
+                "environment": {
+                  "$ref": "#/components/schemas/EnvironmentRef"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/DeploymentStatus"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  }
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "name",
+                "slug",
+                "color",
+                "position",
+                "created_at",
+                "updated_at",
+                "deployment_count"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "deployment_count": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Number of deployment records for this environment."
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "latest_deployment": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeploymentBrief",
+                      "description": "Most recent recorded deployment of any status."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "latest_successful_deployment": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeploymentBrief",
+                      "description": "Most recent recorded deployment with status `successful`."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "server_label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_NoteResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A note without its document body (list views).",
+              "required": [
+                "id",
+                "title",
+                "excerpt",
+                "is_pinned",
+                "created_at",
+                "updated_at",
+                "tags"
+              ],
+              "properties": {
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "excerpt": {
+                  "type": "string",
+                  "description": "Plain-text preview of the content."
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "is_pinned": {
+                  "type": "boolean"
+                },
+                "project": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ProjectRef"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "project_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  }
+                },
+                "title": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_ProjectResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "slug",
+                "default_branch",
+                "status",
+                "created_at",
+                "updated_at",
+                "tags",
+                "stats"
+              ],
+              "properties": {
+                "archived_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "default_branch": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "repository_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "stats": {
+                  "$ref": "#/components/schemas/ProjectStats"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/ProjectStatus"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  }
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_ReleaseResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "version",
+                "title",
+                "status",
+                "created_at",
+                "updated_at",
+                "tags",
+                "commit_count"
+              ],
+              "properties": {
+                "commit_count": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "released_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "status": {
+                  "$ref": "#/components/schemas/ReleaseStatus"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagRef"
+                  }
+                },
+                "title": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "version": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "Paginated_TagResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "slug",
+                "color",
+                "created_at",
+                "updated_at",
+                "usage"
+              ],
+              "properties": {
+                "color": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "usage": {
+                  "$ref": "#/components/schemas/TagUsage"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
+      "ProjectActivity": {
+        "type": "object",
+        "required": [
+          "project",
+          "commit_count",
+          "deployment_count",
+          "last_activity_at"
+        ],
+        "properties": {
+          "commit_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest of: project update, last commit date, last deployment."
+          },
+          "last_commit_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_deployment_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          }
+        }
+      },
+      "ProjectRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "ProjectResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "default_branch",
+          "status",
+          "created_at",
+          "updated_at",
+          "tags",
+          "stats"
+        ],
+        "properties": {
+          "archived_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "default_branch": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "repository_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/ProjectStats"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ProjectSort": {
+        "type": "string",
+        "enum": [
+          "name",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "ProjectStats": {
+        "type": "object",
+        "description": "Record counts of a project.",
+        "required": [
+          "commit_count",
+          "environment_count",
+          "deployment_count",
+          "release_count",
+          "note_count"
+        ],
+        "properties": {
+          "commit_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "environment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_deployed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Time of the most recent recorded deployment, if any."
+          },
+          "note_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "release_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ProjectStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived"
+        ]
+      },
+      "ReleaseDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReleaseResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "commits"
+            ],
+            "properties": {
+              "commits": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommitBrief"
+                },
+                "description": "Associated commits, newest first."
+              },
+              "release_notes": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Tiptap JSON document."
+              }
+            }
+          }
+        ],
+        "description": "A release with its notes and associated commits."
+      },
+      "ReleaseRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "title",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReleaseStatus"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project",
+          "version",
+          "title",
+          "status",
+          "created_at",
+          "updated_at",
+          "tags",
+          "commit_count"
+        ],
+        "properties": {
+          "commit_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "released_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReleaseStatus"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TagRef"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "ReleaseSort": {
+        "type": "string",
+        "enum": [
+          "released_at",
+          "created_at",
+          "version"
+        ]
+      },
+      "ReleaseStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "released",
+          "deprecated"
+        ]
+      },
+      "ReorderEnvironmentsRequest": {
+        "type": "object",
+        "required": [
+          "environment_ids"
+        ],
+        "properties": {
+          "environment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Every environment id of the project, in the desired display order."
+          }
+        }
+      },
+      "SearchHit": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SearchKind"
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "The record's most relevant date (commit date, deployment time, …)."
+          },
+          "project": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectRef",
+                "description": "Owning project (absent for projects, tags and global notes)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtitle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Secondary line: hash and branch, environment and status, excerpt…"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchKind": {
+        "type": "string",
+        "enum": [
+          "project",
+          "commit",
+          "deployment",
+          "release",
+          "note",
+          "tag"
+        ]
+      },
+      "SearchResponse": {
+        "type": "object",
+        "description": "Hits grouped by record type, each group capped at `limit`.",
+        "required": [
+          "query",
+          "projects",
+          "commits",
+          "deployments",
+          "releases",
+          "notes",
+          "tags",
+          "total"
+        ],
+        "properties": {
+          "commits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "deployments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "query": {
+            "type": "string"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Number of hits returned across all groups.",
+            "minimum": 0
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "required": [
+          "user",
+          "csrf_token"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string",
+            "description": "Send this value in the `X-CSRF-Token` header of every state-changing request."
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        }
+      },
+      "SharedCommit": {
+        "type": "object",
+        "required": [
+          "commit",
+          "base_last_deployed_at",
+          "target_last_deployed_at"
+        ],
+        "properties": {
+          "base_last_deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commit": {
+            "$ref": "#/components/schemas/CommitBrief"
+          },
+          "target_last_deployed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SortOrder": {
+        "type": "string",
+        "enum": [
+          "asc",
+          "desc"
+        ]
+      },
+      "TagRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "color"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "TagResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "color",
+          "created_at",
+          "updated_at",
+          "usage"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/TagUsage"
+          }
+        }
+      },
+      "TagSort": {
+        "type": "string",
+        "enum": [
+          "name",
+          "created_at",
+          "usage"
+        ]
+      },
+      "TagUsage": {
+        "type": "object",
+        "description": "How many records of each kind carry the tag.",
+        "required": [
+          "project_count",
+          "commit_count",
+          "deployment_count",
+          "release_count",
+          "note_count",
+          "total"
+        ],
+        "properties": {
+          "commit_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "note_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "project_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "release_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "UpdateCommitRequest": {
+        "type": "object",
+        "properties": {
+          "author_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "branch_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "commit_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "commit_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "short_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the commit's tags."
+          }
+        }
+      },
+      "UpdateDeploymentRequest": {
+        "type": "object",
+        "properties": {
+          "commit_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "deployed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "deployment_notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deployment_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DeploymentStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the deployment's tags."
+          }
+        }
+      },
+      "UpdateEnvironmentRequest": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "server_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpdateNoteRequest": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_json": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Tiptap JSON document."
+          },
+          "is_pinned": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "`null` turns the note into a global note."
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the note's tags."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpdateProjectRequest": {
+        "type": "object",
+        "description": "Partial update. Omitted fields are left unchanged; nullable fields are\ncleared by sending `null`.",
+        "properties": {
+          "default_branch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "repository_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStatus",
+                "description": "`archived` archives the project, `active` restores it."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the project's tags."
+          }
+        }
+      },
+      "UpdateReleaseRequest": {
+        "type": "object",
+        "properties": {
+          "commit_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the associated commits."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "release_notes": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Tiptap JSON document; `null` clears the notes."
+          },
+          "released_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tag_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replaces the release's tags."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UpdateTagRequest": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "csrf_token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Per-session token from `GET /auth/csrf`; required on state-changing requests."
+      },
+      "session_cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "cv_session",
+        "description": "HttpOnly session cookie set by `POST /auth/login` (named `__Host-cv_session` over HTTPS)."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Session and account"
+    },
+    {
+      "name": "dashboard",
+      "description": "Workspace overview"
+    },
+    {
+      "name": "projects",
+      "description": "Projects"
+    },
+    {
+      "name": "environments",
+      "description": "Deployment targets of a project"
+    },
+    {
+      "name": "commits",
+      "description": "Manually recorded commits"
+    },
+    {
+      "name": "deployments",
+      "description": "Recorded deployment events"
+    },
+    {
+      "name": "releases",
+      "description": "Releases and their commits"
+    },
+    {
+      "name": "notes",
+      "description": "Technical notes (rich text)"
+    },
+    {
+      "name": "tags",
+      "description": "Reusable tags"
+    },
+    {
+      "name": "search",
+      "description": "Global search"
+    },
+    {
+      "name": "system",
+      "description": "Operational endpoints"
+    }
+  ]
+}

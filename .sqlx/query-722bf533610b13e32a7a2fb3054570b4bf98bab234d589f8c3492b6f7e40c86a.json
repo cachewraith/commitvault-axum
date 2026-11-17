@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM projects) AS \"projects!\",\n                  (SELECT count(*) FROM projects WHERE status = 'active') AS \"active_projects!\",\n                  (SELECT count(*) FROM commits) AS \"commits!\",\n                  (SELECT count(*) FROM environments) AS \"environments!\",\n                  (SELECT count(*) FROM deployments) AS \"deployments!\",\n                  (SELECT count(*) FROM releases) AS \"releases!\",\n                  (SELECT count(*) FROM notes) AS \"notes!\",\n                  (SELECT count(*) FROM tags) AS \"tags!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "active_projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "commits!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "environments!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "deployments!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "releases!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "notes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "tags!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "722bf533610b13e32a7a2fb3054570b4bf98bab234d589f8c3492b6f7e40c86a"
+}

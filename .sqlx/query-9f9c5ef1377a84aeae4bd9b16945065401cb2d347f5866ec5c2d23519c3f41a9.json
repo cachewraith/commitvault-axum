@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM environments WHERE id = $2 AND project_id = $1) AS \"environment_ok!\",\n                  EXISTS (SELECT 1 FROM commits WHERE id = $3 AND project_id = $1) AS \"commit_ok!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "environment_ok!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "commit_ok!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "9f9c5ef1377a84aeae4bd9b16945065401cb2d347f5866ec5c2d23519c3f41a9"
+}

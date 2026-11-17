@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO deployments (id, project_id, environment_id, commit_id, deployment_title, deployment_notes,\n                                  deployed_at, status)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "10da1c8b95bdbfa217f32a78c29b6be8bd9f9c322b15a20130737f61616b2b20"
+}

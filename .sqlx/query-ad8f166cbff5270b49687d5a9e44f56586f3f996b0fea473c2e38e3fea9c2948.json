@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE environments e SET position = (o.ord - 1)::int\n         FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, ord)\n         WHERE e.id = o.id AND e.project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ad8f166cbff5270b49687d5a9e44f56586f3f996b0fea473c2e38e3fea9c2948"
+}

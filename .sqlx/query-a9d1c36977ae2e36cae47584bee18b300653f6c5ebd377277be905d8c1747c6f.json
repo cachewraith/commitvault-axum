@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE deployments\n         SET environment_id = $2, commit_id = $3, deployment_title = $4, deployment_notes = $5,\n             deployed_at = $6, status = $7\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9d1c36977ae2e36cae47584bee18b300653f6c5ebd377277be905d8c1747c6f"
+}

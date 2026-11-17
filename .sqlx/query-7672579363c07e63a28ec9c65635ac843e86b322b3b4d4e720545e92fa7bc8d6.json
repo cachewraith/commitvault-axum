@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO release_commits (release_id, commit_id, project_id)\n         SELECT $1, id, $2 FROM commits WHERE id = ANY($3) AND project_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7672579363c07e63a28ec9c65635ac843e86b322b3b4d4e720545e92fa7bc8d6"
+}

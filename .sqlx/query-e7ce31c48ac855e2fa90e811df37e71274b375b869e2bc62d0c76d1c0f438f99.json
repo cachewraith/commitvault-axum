@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE environments SET name = $2, slug = $3, description = $4, color = $5, server_label = $6 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7ce31c48ac855e2fa90e811df37e71274b375b869e2bc62d0c76d1c0f438f99"
+}

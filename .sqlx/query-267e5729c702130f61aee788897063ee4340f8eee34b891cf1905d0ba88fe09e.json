@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notes\n         SET project_id = $2, title = $3, content_json = $4, content_text = $5, excerpt = $6,\n             category = $7, is_pinned = $8\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "267e5729c702130f61aee788897063ee4340f8eee34b891cf1905d0ba88fe09e"
+}

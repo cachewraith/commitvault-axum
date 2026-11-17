@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT branch_name AS name, count(*) AS \"commit_count!\", max(commit_date) AS \"last_commit_at!\"\n           FROM commits WHERE project_id = $1\n           GROUP BY branch_name ORDER BY max(commit_date) DESC, branch_name LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commits",
+            "name": "branch_name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "commit_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_commit_at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "79b7fa6668687857a4166315274f24a6481323187769d38b36b3d4de0699d6ea"
+}

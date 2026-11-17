@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE releases\n         SET version = $2, title = $3, description = $4, release_notes = $5, release_notes_text = $6,\n             released_at = $7, status = $8\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c400aeec85375f8722ef1c422622e56e9d3e624e8992d7ca183876caf84b7c8"
+}

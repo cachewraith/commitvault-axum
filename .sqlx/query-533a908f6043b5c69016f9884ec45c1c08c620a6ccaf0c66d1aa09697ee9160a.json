@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (WHERE in_base AND NOT in_target) AS \"only_in_base!\",\n                  count(*) FILTER (WHERE in_target AND NOT in_base) AS \"only_in_target!\",\n                  count(*) FILTER (WHERE in_base AND in_target) AS \"in_both!\"\n           FROM (SELECT bool_or(environment_id = $2) AS in_base, bool_or(environment_id = $3) AS in_target\n                 FROM deployments\n                 WHERE project_id = $1 AND environment_id IN ($2, $3) AND ($4 OR status = 'successful')\n                 GROUP BY commit_id) per_commit",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "only_in_base!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "only_in_target!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "in_both!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "533a908f6043b5c69016f9884ec45c1c08c620a6ccaf0c66d1aa09697ee9160a"
+}
