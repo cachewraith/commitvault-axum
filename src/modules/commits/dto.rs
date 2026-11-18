@@ -113,6 +113,7 @@ pub enum CommitSort {
     #[default]
     CommitDate,
     CreatedAt,
+    /// Project, then branch name; newest commit first within a branch.
     BranchName,
 }
 

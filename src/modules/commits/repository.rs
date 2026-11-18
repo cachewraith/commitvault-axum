@@ -119,12 +119,17 @@ fn push_filters(query: &mut QueryBuilder<Postgres>, filter: &CommitFilter) {
 pub async fn list(pool: &PgPool, filter: &CommitFilter, page: Page) -> sqlx::Result<(Vec<CommitResponse>, i64)> {
     let mut rows: QueryBuilder<Postgres> = QueryBuilder::new(VIEW_SQL.as_str());
     push_filters(&mut rows, filter);
-    let column = match filter.sort {
-        CommitSort::CommitDate => "c.commit_date",
-        CommitSort::CreatedAt => "c.created_at",
-        CommitSort::BranchName => "b.name",
+    let order = filter.order.sql();
+    match filter.sort {
+        CommitSort::CommitDate => rows.push(" ORDER BY c.commit_date ").push(order),
+        CommitSort::CreatedAt => rows.push(" ORDER BY c.created_at ").push(order),
+        // Grouping order: each project's branches together, newest commit
+        // first inside a branch (the date-range view relies on this).
+        CommitSort::BranchName => {
+            rows.push(" ORDER BY p.name ").push(order).push(", p.id, b.name ").push(order).push(", c.commit_date DESC")
+        }
     };
-    rows.push(" ORDER BY ").push(column).push(' ').push(filter.order.sql()).push(", c.id DESC");
+    rows.push(", c.id DESC");
     rows.push(" LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());
 
     let mut count: QueryBuilder<Postgres> = QueryBuilder::new(format!("SELECT count(*) {FROM_SQL}"));

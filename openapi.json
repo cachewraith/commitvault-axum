@@ -354,7 +354,7 @@
           "auth"
         ],
         "summary": "Reset the password with an emailed code",
-        "description": "Signs out every session and forgets every trusted browser.",
+        "description": "Signs out every session and forgets every other trusted browser. The\nbrowser that made the request is trusted (device cookie): having the\nemailed code is the same proof as the sign-in code, so its next sign-in\ndoes not ask for one.",
         "operationId": "reset_password",
         "requestBody": {
           "content": {

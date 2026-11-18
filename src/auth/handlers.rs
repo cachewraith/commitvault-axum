@@ -126,7 +126,10 @@ pub async fn forgot_password(
 
 /// Reset the password with an emailed code
 ///
-/// Signs out every session and forgets every trusted browser.
+/// Signs out every session and forgets every other trusted browser. The
+/// browser that made the request is trusted (device cookie): having the
+/// emailed code is the same proof as the sign-in code, so its next sign-in
+/// does not ask for one.
 #[utoipa::path(post, path = "/auth/password/reset", tag = "auth", request_body = ResetPasswordRequest,
     responses(
         (status = 204),
@@ -137,9 +140,10 @@ pub async fn reset_password(
     State(state): State<AppState>,
     ClientIp(client_ip): ClientIp,
     ValidJson(request): ValidJson<ResetPasswordRequest>,
-) -> AppResult<StatusCode> {
-    service::reset_password(&state, &client_ip, request).await?;
-    Ok(StatusCode::NO_CONTENT)
+) -> AppResult<(StatusCode, AppendHeaders<[(axum::http::HeaderName, axum::http::HeaderValue); 1]>)> {
+    let device_token = service::reset_password(&state, &client_ip, request).await?;
+    let cookie = device::set_cookie(&state.config, &device_token);
+    Ok((StatusCode::NO_CONTENT, AppendHeaders([(SET_COOKIE, cookie)])))
 }
 
 /// Sign out

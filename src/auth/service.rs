@@ -123,9 +123,7 @@ pub async fn verify_login_code(
     state.login_limiter.reset(&ip_key);
     state.login_limiter.reset(&user_key);
 
-    let token = device::new_token();
-    let expires_at = Utc::now() + device::TRUSTED_DEVICE_TTL;
-    repository::insert_trusted_device(&state.db, user.id, &device::hash_token(&token), expires_at).await?;
+    let token = trust_device(state, user.id).await?;
     Ok((complete_login(session, user).await?, token))
 }
 
@@ -183,8 +181,11 @@ pub fn forgot_password(state: &AppState, client_ip: &str, request: ForgotPasswor
 }
 
 /// Sets a new password with an emailed reset code, then signs out every
-/// session and forgets every trusted browser.
-pub async fn reset_password(state: &AppState, client_ip: &str, request: ResetPasswordRequest) -> AppResult<()> {
+/// session and forgets every other trusted browser. The browser that reset
+/// the password just proved it can read the account's email — the same proof
+/// as a sign-in code — so it is trusted: its next sign-in needs no code.
+/// Returns that browser's new device token.
+pub async fn reset_password(state: &AppState, client_ip: &str, request: ResetPasswordRequest) -> AppResult<String> {
     let email = request.email.to_lowercase();
     let ip_key = format!("reset-ip:{client_ip}");
     let email_key = format!("reset-email:{email}");
@@ -214,7 +215,15 @@ pub async fn reset_password(state: &AppState, client_ip: &str, request: ResetPas
     let sessions = repository::delete_all_sessions(&state.db, user.id).await?;
     let devices = repository::delete_trusted_devices(&state.db, user.id).await?;
     tracing::info!(user_id = %user.id, sessions, devices, "password reset; sessions and trusted browsers revoked");
-    Ok(())
+    trust_device(state, user.id).await
+}
+
+/// Registers a new trusted browser; returns the token for its device cookie.
+async fn trust_device(state: &AppState, user_id: Uuid) -> AppResult<String> {
+    let token = device::new_token();
+    let expires_at = Utc::now() + device::TRUSTED_DEVICE_TTL;
+    repository::insert_trusted_device(&state.db, user_id, &device::hash_token(&token), expires_at).await?;
+    Ok(token)
 }
 
 /// Turns the session into a signed-in one.

@@ -210,6 +210,15 @@ async fn password_reset_with_an_emailed_code(pool: PgPool) {
     laptop.login_as(ADMIN_EMAIL, ADMIN_PASSWORD).await.assert_status(StatusCode::UNAUTHORIZED);
     let again = laptop.login_as(ADMIN_EMAIL, NEW_PASSWORD).await.assert_status(StatusCode::OK);
     assert_eq!(again.data()["status"], "code_required");
+
+    // The browser that reset the password proved it reads the mailbox: its
+    // next sign-in goes straight through, without another code.
+    assert!(app.has_cookie("cv_device"));
+    let emails = app.sent().len();
+    app.fetch_csrf().await;
+    let signed_in = app.login_as(ADMIN_EMAIL, NEW_PASSWORD).await.assert_status(StatusCode::OK);
+    assert_eq!(signed_in.data()["status"], "authenticated");
+    assert_eq!(app.sent().len(), emails, "no sign-in code was sent");
 }
 
 #[sqlx::test]

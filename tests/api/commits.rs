@@ -189,6 +189,10 @@ async fn commit_list_search_and_filters(pool: PgPool) {
     let oldest_first = app.get("/api/v1/commits?sort=commit_date&order=asc&per_page=1").await;
     assert_eq!(ids(&oldest_first), [login.as_str()]);
     assert_eq!(oldest_first.body["meta"]["total"], 4);
+
+    // Branch order groups by project, then branch, newest commit first.
+    let grouped = app.get("/api/v1/commits?sort=branch_name&order=asc").await;
+    assert_eq!(ids(&grouped), [post.clone(), cart.clone(), login.clone(), fix.clone()]);
 }
 
 #[sqlx::test]
