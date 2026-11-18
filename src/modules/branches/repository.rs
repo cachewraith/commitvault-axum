@@ -63,6 +63,7 @@ pub async fn list(pool: &PgPool, filter: &BranchFilter, page: Page) -> sqlx::Res
         BranchSort::LastCommit => "s.last_commit_at",
         BranchSort::Name => "b.name",
         BranchSort::CreatedAt => "b.created_at",
+        BranchSort::Commits => "s.commit_count",
     };
     rows.push(" ORDER BY ").push(column).push(' ').push(filter.order.sql()).push(" NULLS LAST, b.name, b.id");
     rows.push(" LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());

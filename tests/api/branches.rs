@@ -90,9 +90,13 @@ async fn list_counts_commits_sorts_and_searches(pool: PgPool) {
     app.create_branch(&project, "release/1.0").await;
 
     let path = format!("/api/v1/projects/{project}/branches");
-    // Default: latest commit first, branches without commits last.
+    // Default: newest branch first.
     let list = app.get(&path).await.assert_status(StatusCode::OK);
+    assert_eq!(names(&list), ["release/1.0", "feature/cart", "feature/login", "main"]);
+    // Latest commit first, branches without commits last.
+    let list = app.get(&format!("{path}?sort=last_commit")).await.assert_status(StatusCode::OK);
     assert_eq!(names(&list), ["feature/cart", "feature/login", "main", "release/1.0"]);
+    assert_eq!(names(&app.get(&format!("{path}?sort=commits")).await)[0], "feature/login");
     assert_eq!(list.data()[1]["commit_count"], 2);
     assert_eq!(list.data()[1]["last_commit_at"], "2026-01-12T00:00:00Z");
     assert_eq!(list.body["meta"]["total"], 4);

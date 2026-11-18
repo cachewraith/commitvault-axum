@@ -37,10 +37,13 @@ pub struct UpdateBranchRequest {
 #[serde(rename_all = "snake_case")]
 pub enum BranchSort {
     /// Most recent commit date (branches without commits last).
-    #[default]
     LastCommit,
     Name,
+    /// Default: newest first.
+    #[default]
     CreatedAt,
+    /// Number of commits on the branch.
+    Commits,
 }
 
 #[derive(Debug, Default, Deserialize, Validate, IntoParams)]

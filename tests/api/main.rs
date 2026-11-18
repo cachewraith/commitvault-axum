@@ -14,3 +14,4 @@ mod notes_tags;
 mod openapi;
 mod projects_environments;
 mod releases;
+mod sorting;

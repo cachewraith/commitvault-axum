@@ -3,9 +3,12 @@ use std::sync::LazyLock;
 use sqlx::{PgConnection, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
-use super::{dto::EnvironmentResponse, models::Environment};
+use super::{
+    dto::{EnvironmentResponse, EnvironmentSort},
+    models::Environment,
+};
 use crate::shared::{
-    pagination::Page,
+    pagination::{Page, SortOrder},
     sql::{COMMIT_BRIEF_JSON, PROJECT_REF_JSON},
 };
 
@@ -39,8 +42,8 @@ pub struct EnvironmentFilter {
     pub pattern: Option<String>,
     /// Only environments of non-archived projects.
     pub active_projects_only: bool,
-    /// Most recently deployed first instead of project/position order.
-    pub recent_first: bool,
+    pub sort: EnvironmentSort,
+    pub order: SortOrder,
 }
 
 fn push_filters(query: &mut QueryBuilder<Postgres>, filter: &EnvironmentFilter) {
@@ -64,11 +67,19 @@ pub async fn list(
 ) -> sqlx::Result<(Vec<EnvironmentResponse>, i64)> {
     let mut rows: QueryBuilder<Postgres> = QueryBuilder::new(VIEW_SQL.as_str());
     push_filters(&mut rows, filter);
-    rows.push(if filter.recent_first {
-        " ORDER BY (SELECT max(d.deployed_at) FROM deployments d WHERE d.environment_id = e.id) DESC NULLS LAST, e.id"
-    } else {
-        " ORDER BY lower(p.name), e.position, e.created_at, e.id"
-    });
+    let order = filter.order.sql();
+    match filter.sort {
+        EnvironmentSort::CreatedAt => rows.push(" ORDER BY e.created_at ").push(order),
+        EnvironmentSort::Name => rows.push(" ORDER BY lower(e.name) ").push(order),
+        EnvironmentSort::Project => {
+            rows.push(" ORDER BY lower(p.name) ").push(order).push(", e.position, e.created_at")
+        }
+        EnvironmentSort::LastDeployedAt => rows
+            .push(" ORDER BY (SELECT max(d.deployed_at) FROM deployments d WHERE d.environment_id = e.id) ")
+            .push(order)
+            .push(" NULLS LAST"),
+    };
+    rows.push(", e.id");
     rows.push(" LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());
 
     let mut count: QueryBuilder<Postgres> =

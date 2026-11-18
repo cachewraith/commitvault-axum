@@ -21,7 +21,8 @@ pub async fn overview(pool: &PgPool) -> AppResult<DashboardResponse> {
     let commit_filter = commits::repository::CommitFilter::default();
     let environment_filter = environments::repository::EnvironmentFilter {
         active_projects_only: true,
-        recent_first: true,
+        sort: environments::dto::EnvironmentSort::LastDeployedAt,
+        order: crate::shared::pagination::SortOrder::Desc,
         ..Default::default()
     };
 

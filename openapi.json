@@ -1181,6 +1181,23 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EnvironmentSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Defaults to `asc` for `name` and `project`, `desc` otherwise.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "required": false,
@@ -3907,7 +3924,8 @@
         "enum": [
           "last_commit",
           "name",
-          "created_at"
+          "created_at",
+          "commits"
         ]
       },
       "ChangePasswordRequest": {
@@ -4144,9 +4162,10 @@
       "CommitSort": {
         "type": "string",
         "enum": [
-          "commit_date",
           "created_at",
-          "branch_name"
+          "commit_date",
+          "branch_name",
+          "message"
         ]
       },
       "ComparedCommit": {
@@ -5893,8 +5912,10 @@
       "DeploymentSort": {
         "type": "string",
         "enum": [
+          "created_at",
           "deployed_at",
-          "created_at"
+          "title",
+          "status"
         ]
       },
       "DeploymentStatus": {
@@ -6079,6 +6100,15 @@
             "format": "date-time"
           }
         }
+      },
+      "EnvironmentSort": {
+        "type": "string",
+        "enum": [
+          "created_at",
+          "name",
+          "project",
+          "last_deployed_at"
+        ]
       },
       "ErrorBody": {
         "type": "object",
@@ -7150,7 +7180,9 @@
         "enum": [
           "name",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "last_deployed_at",
+          "commits"
         ]
       },
       "ProjectStats": {
@@ -7326,9 +7358,10 @@
       "ReleaseSort": {
         "type": "string",
         "enum": [
-          "released_at",
           "created_at",
-          "version"
+          "released_at",
+          "version",
+          "title"
         ]
       },
       "ReleaseStatus": {

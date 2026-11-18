@@ -47,6 +47,7 @@ use crate::{AppState, auth, errors::ErrorResponse, middleware::auth::require_aut
         modules::commits::dto::CommitSort,
         modules::commits::dto::CommitDeploymentFilter,
         modules::deployments::dto::DeploymentSort,
+        modules::environments::dto::EnvironmentSort,
         modules::releases::dto::ReleaseSort,
         modules::notes::dto::NoteSort,
         modules::tags::dto::TagSort,

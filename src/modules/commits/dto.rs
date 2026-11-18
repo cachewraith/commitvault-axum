@@ -110,11 +110,14 @@ impl CommitDeploymentFilter {
 #[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CommitSort {
+    /// When the commit was recorded. Default: newest first.
     #[default]
-    CommitDate,
     CreatedAt,
+    CommitDate,
     /// Project, then branch name; newest commit first within a branch.
     BranchName,
+    /// Commit message, alphabetically.
+    Message,
 }
 
 #[derive(Debug, Default, Deserialize, Validate, IntoParams)]

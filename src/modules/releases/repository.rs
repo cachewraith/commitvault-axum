@@ -72,6 +72,7 @@ pub async fn list(pool: &PgPool, filter: &ReleaseFilter, page: Page) -> sqlx::Re
         (ReleaseSort::ReleasedAt, SortOrder::Asc) => rows.push("r.released_at ASC NULLS LAST, r.created_at ASC"),
         (ReleaseSort::CreatedAt, order) => rows.push("r.created_at ").push(order.sql()),
         (ReleaseSort::Version, order) => rows.push("r.version ").push(order.sql()),
+        (ReleaseSort::Title, order) => rows.push("lower(r.title) ").push(order.sql()),
     };
     rows.push(", r.id LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());
 

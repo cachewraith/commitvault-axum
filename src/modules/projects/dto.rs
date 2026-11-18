@@ -65,9 +65,14 @@ pub struct UpdateProjectRequest {
 #[serde(rename_all = "snake_case")]
 pub enum ProjectSort {
     Name,
-    CreatedAt,
+    /// Default: newest first.
     #[default]
+    CreatedAt,
     UpdatedAt,
+    /// Latest recorded deployment (projects without one last).
+    LastDeployedAt,
+    /// Number of recorded commits.
+    Commits,
 }
 
 #[derive(Debug, Deserialize, Validate, IntoParams)]

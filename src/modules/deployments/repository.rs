@@ -93,6 +93,10 @@ pub async fn list(
     let column = match filter.sort {
         DeploymentSort::DeployedAt => "d.deployed_at",
         DeploymentSort::CreatedAt => "d.created_at",
+        DeploymentSort::Title => "lower(d.deployment_title)",
+        DeploymentSort::Status => {
+            "CASE d.status WHEN 'failed' THEN 0 WHEN 'rolled_back' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END"
+        }
     };
     rows.push(" ORDER BY ").push(column).push(' ').push(filter.order.sql()).push(", d.id DESC");
     rows.push(" LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());

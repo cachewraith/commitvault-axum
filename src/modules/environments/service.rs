@@ -5,8 +5,8 @@ use uuid::Uuid;
 
 use super::{
     dto::{
-        CreateEnvironmentRequest, DEFAULT_ENVIRONMENT_COLOR, EnvironmentResponse, ListEnvironmentsQuery,
-        MAX_ENVIRONMENTS_PER_PROJECT, ReorderEnvironmentsRequest, UpdateEnvironmentRequest,
+        CreateEnvironmentRequest, DEFAULT_ENVIRONMENT_COLOR, EnvironmentResponse, EnvironmentSort,
+        ListEnvironmentsQuery, MAX_ENVIRONMENTS_PER_PROJECT, ReorderEnvironmentsRequest, UpdateEnvironmentRequest,
     },
     models::Environment,
     repository::{self, EnvironmentFilter},
@@ -15,7 +15,7 @@ use crate::{
     errors::{AppError, AppResult},
     modules::projects,
     shared::{
-        pagination::Page,
+        pagination::{Page, SortOrder},
         response::Paginated,
         text::{like_contains, slug_or_fallback},
     },
@@ -25,9 +25,15 @@ const ENVIRONMENT: &str = "Environment";
 
 pub async fn list(pool: &PgPool, query: ListEnvironmentsQuery) -> AppResult<Paginated<EnvironmentResponse>> {
     let page = Page::new(query.page, query.per_page);
+    let sort = query.sort.unwrap_or_default();
     let filter = EnvironmentFilter {
         project_id: query.project_id,
         pattern: query.search.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(like_contains),
+        sort,
+        order: query.order.unwrap_or(match sort {
+            EnvironmentSort::Name | EnvironmentSort::Project => SortOrder::Asc,
+            _ => SortOrder::Desc,
+        }),
         ..Default::default()
     };
     let (items, total) = repository::list(pool, &filter, page).await?;

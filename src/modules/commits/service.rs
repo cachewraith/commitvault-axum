@@ -2,7 +2,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{
-    dto::{CommitResponse, CreateCommitRequest, ListCommitsQuery, SHORT_HASH_LEN, UpdateCommitRequest},
+    dto::{CommitResponse, CommitSort, CreateCommitRequest, ListCommitsQuery, SHORT_HASH_LEN, UpdateCommitRequest},
     models::Commit,
     repository::{self, CommitFilter},
 };
@@ -13,7 +13,7 @@ use crate::{
         tags::{self, models::TagTarget},
     },
     shared::{
-        pagination::Page,
+        pagination::{Page, SortOrder},
         response::Paginated,
         text::{like_contains, like_prefix},
     },
@@ -43,7 +43,11 @@ pub async fn list(pool: &PgPool, query: ListCommitsQuery) -> AppResult<Paginated
         tag_id: query.tag_id,
         release_id: query.release_id,
         sort: query.sort.unwrap_or_default(),
-        order: query.order.unwrap_or_default(),
+        // Text reads best A→Z; dates newest first.
+        order: query.order.unwrap_or(match query.sort {
+            Some(CommitSort::BranchName | CommitSort::Message) => SortOrder::Asc,
+            _ => SortOrder::Desc,
+        }),
     };
     let (items, total) = repository::list(pool, &filter, page).await?;
     Ok(Paginated::new(items, page, total))

@@ -123,6 +123,7 @@ pub async fn list(pool: &PgPool, filter: &CommitFilter, page: Page) -> sqlx::Res
     match filter.sort {
         CommitSort::CommitDate => rows.push(" ORDER BY c.commit_date ").push(order),
         CommitSort::CreatedAt => rows.push(" ORDER BY c.created_at ").push(order),
+        CommitSort::Message => rows.push(" ORDER BY lower(c.commit_message) ").push(order),
         // Grouping order: each project's branches together, newest commit
         // first inside a branch (the date-range view relies on this).
         CommitSort::BranchName => {

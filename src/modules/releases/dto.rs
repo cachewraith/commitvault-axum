@@ -76,10 +76,13 @@ pub struct UpdateReleaseRequest {
 #[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReleaseSort {
+    /// Default: newest first.
     #[default]
-    ReleasedAt,
     CreatedAt,
+    /// Drafts (no release date) first when newest-first.
+    ReleasedAt,
     Version,
+    Title,
 }
 
 #[derive(Debug, Default, Deserialize, Validate, IntoParams)]

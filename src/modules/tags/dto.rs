@@ -32,9 +32,11 @@ pub struct UpdateTagRequest {
 #[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum TagSort {
-    #[default]
     Name,
+    /// Default: newest first.
+    #[default]
     CreatedAt,
+    /// Number of records using the tag.
     Usage,
 }
 

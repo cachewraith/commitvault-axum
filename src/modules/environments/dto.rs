@@ -5,6 +5,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::shared::{
+    pagination::SortOrder,
     refs::{DeploymentBrief, ProjectRef},
     serde_helpers, validation,
 };
@@ -63,8 +64,24 @@ pub struct ListEnvironmentsQuery {
     /// Matches environment name and server label.
     #[validate(length(max = 100))]
     pub search: Option<String>,
+    pub sort: Option<EnvironmentSort>,
+    /// Defaults to `asc` for `name` and `project`, `desc` otherwise.
+    pub order: Option<SortOrder>,
     pub page: Option<u32>,
     pub per_page: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EnvironmentSort {
+    /// Default: newest first.
+    #[default]
+    CreatedAt,
+    Name,
+    /// Project name, then the project's own environment order.
+    Project,
+    /// Latest recorded deployment (environments without one last).
+    LastDeployedAt,
 }
 
 #[derive(Debug, Deserialize, Validate, IntoParams)]

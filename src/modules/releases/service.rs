@@ -36,8 +36,11 @@ pub async fn list(pool: &PgPool, query: ListReleasesQuery) -> AppResult<Paginate
         pattern: query.search.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(like_contains),
         tag_id: query.tag_id,
         commit_id: query.commit_id,
-        sort: query.sort.unwrap_or(ReleaseSort::ReleasedAt),
-        order: query.order.unwrap_or(SortOrder::Desc),
+        sort: query.sort.unwrap_or_default(),
+        order: query.order.unwrap_or(match query.sort {
+            Some(ReleaseSort::Version | ReleaseSort::Title) => SortOrder::Asc,
+            _ => SortOrder::Desc,
+        }),
     };
     let (items, total) = repository::list(pool, &filter, page).await?;
     Ok(Paginated::new(items, page, total))

@@ -60,8 +60,9 @@ pub struct UpdateNoteRequest {
 #[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteSort {
-    #[default]
     UpdatedAt,
+    /// Default: newest first.
+    #[default]
     CreatedAt,
     Title,
 }

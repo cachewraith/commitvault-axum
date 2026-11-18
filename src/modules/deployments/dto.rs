@@ -62,9 +62,13 @@ pub struct UpdateDeploymentRequest {
 #[derive(Debug, Clone, Copy, Default, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DeploymentSort {
+    /// When the record was created. Default: newest first.
     #[default]
-    DeployedAt,
     CreatedAt,
+    DeployedAt,
+    Title,
+    /// Problems first when ascending: failed, rolled back, pending, successful.
+    Status,
 }
 
 #[derive(Debug, Default, Deserialize, Validate, IntoParams)]

@@ -58,12 +58,15 @@ fn push_filters(query: &mut QueryBuilder<Postgres>, filter: &ProjectFilter) {
 pub async fn list(pool: &PgPool, filter: &ProjectFilter, page: Page) -> sqlx::Result<(Vec<ProjectResponse>, i64)> {
     let mut rows: QueryBuilder<Postgres> = QueryBuilder::new(VIEW_SQL.as_str());
     push_filters(&mut rows, filter);
+    // `last_deployed_at` and `commit_count` are output columns of VIEW_SQL.
     let column = match filter.sort {
         ProjectSort::Name => "lower(p.name)",
         ProjectSort::CreatedAt => "p.created_at",
         ProjectSort::UpdatedAt => "p.updated_at",
+        ProjectSort::LastDeployedAt => "last_deployed_at",
+        ProjectSort::Commits => "commit_count",
     };
-    rows.push(" ORDER BY ").push(column).push(' ').push(filter.order.sql()).push(", p.id");
+    rows.push(" ORDER BY ").push(column).push(' ').push(filter.order.sql()).push(" NULLS LAST, p.id");
     rows.push(" LIMIT ").push_bind(page.limit()).push(" OFFSET ").push_bind(page.offset());
 
     let mut count: QueryBuilder<Postgres> = QueryBuilder::new("SELECT count(*) FROM projects p");

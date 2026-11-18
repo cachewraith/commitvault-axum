@@ -5,7 +5,7 @@ use uuid::Uuid;
 use super::{
     dto::{
         CompareEnvironmentsQuery, ComparedCommit, ComparisonSide, CreateDeploymentRequest, DeploymentResponse,
-        EnvironmentComparison, ListDeploymentsQuery, SharedCommit, UpdateDeploymentRequest,
+        DeploymentSort, EnvironmentComparison, ListDeploymentsQuery, SharedCommit, UpdateDeploymentRequest,
     },
     models::{Deployment, DeploymentStatus},
     repository::{self, ComparisonRow, DeploymentFilter},
@@ -18,7 +18,7 @@ use crate::{
         tags::{self, models::TagTarget},
     },
     shared::{
-        pagination::Page,
+        pagination::{Page, SortOrder},
         refs::EnvironmentRef,
         response::Paginated,
         text::{like_contains, like_prefix},
@@ -49,7 +49,10 @@ pub async fn list(pool: &PgPool, query: ListDeploymentsQuery) -> AppResult<Pagin
             .map(|s| like_prefix(&s.to_lowercase())),
         tag_id: query.tag_id,
         sort: query.sort.unwrap_or_default(),
-        order: query.order.unwrap_or_default(),
+        order: query.order.unwrap_or(match query.sort {
+            Some(DeploymentSort::Title | DeploymentSort::Status) => SortOrder::Asc,
+            _ => SortOrder::Desc,
+        }),
     };
     let (items, total) = repository::list(pool, &filter, page).await?;
     Ok(Paginated::new(items, page, total))
