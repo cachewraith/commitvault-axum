@@ -372,3 +372,11 @@ async fn unchanged_sessions_are_not_rewritten_on_every_request(pool: PgPool) {
     app.get("/api/v1/auth/me").await.assert_status(StatusCode::OK);
     assert!(expiry().await > before + chrono::Duration::hours(100), "sliding expiry still slides");
 }
+
+#[sqlx::test]
+async fn responses_report_backend_time(pool: PgPool) {
+    let mut app = TestApp::signed_in(pool).await;
+    let response = app.get("/api/v1/projects").await.assert_status(StatusCode::OK);
+    let timing = response.headers.get("server-timing").expect("Server-Timing header").to_str().unwrap();
+    assert!(timing.starts_with("app;dur="), "{timing}");
+}

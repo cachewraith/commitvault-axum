@@ -4,3 +4,4 @@ pub mod auth;
 pub mod client_ip;
 pub mod csrf;
 pub mod security_headers;
+pub mod timing;

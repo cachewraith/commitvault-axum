@@ -95,6 +95,8 @@ pub fn build_app(state: AppState) -> Router {
         .layer(cors_layer(&config))
         .layer(TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, REQUEST_TIMEOUT))
         .layer(CompressionLayer::new())
+        // Wraps sessions, CSRF and handlers: `Server-Timing` is the backend's whole share.
+        .layer(axum::middleware::from_fn(middleware::timing::server_timing))
         .layer(PropagateRequestIdLayer::new(request_id.clone()))
         // The default span records method, path and version — never headers or
         // bodies, so cookies and credentials stay out of the logs.
