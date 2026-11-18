@@ -18,7 +18,8 @@ use crate::{AppState, auth, errors::ErrorResponse, middleware::auth::require_aut
         title = "CommitVault API",
         description = "REST API of CommitVault, a personal workspace for recording commits, deployments, \
                        environments, releases and technical notes.\n\n\
-                       All endpoints except `/health`, `/auth/csrf`, `/auth/login` and `/auth/logout` require the \
+                       All endpoints except `/health` and the sign-in endpoints (`/auth/csrf`, `/auth/options`, \
+                       `/auth/login*`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/reset`) require the \
                        session cookie. Every POST, PUT, PATCH and DELETE request must also send the session's CSRF \
                        token in the `X-CSRF-Token` header."
     ),
@@ -27,6 +28,7 @@ use crate::{AppState, auth, errors::ErrorResponse, middleware::auth::require_aut
         (name = "dashboard", description = "Workspace overview"),
         (name = "projects", description = "Projects"),
         (name = "environments", description = "Deployment targets of a project"),
+        (name = "branches", description = "Branches of a project"),
         (name = "commits", description = "Manually recorded commits"),
         (name = "deployments", description = "Recorded deployment events"),
         (name = "releases", description = "Releases and their commits"),
@@ -41,6 +43,7 @@ use crate::{AppState, auth, errors::ErrorResponse, middleware::auth::require_aut
         ErrorResponse,
         crate::shared::pagination::SortOrder,
         modules::projects::dto::ProjectSort,
+        modules::branches::dto::BranchSort,
         modules::commits::dto::CommitSort,
         modules::commits::dto::CommitDeploymentFilter,
         modules::deployments::dto::DeploymentSort,

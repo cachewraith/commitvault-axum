@@ -71,6 +71,15 @@ pub fn branch_name(value: &str) -> Result<(), ValidationError> {
     if valid { Ok(()) } else { Err(error("branch_name", "Is not a valid Git branch name")) }
 }
 
+/// Six decimal digits (emailed one-time codes).
+pub fn one_time_code(value: &str) -> Result<(), ValidationError> {
+    if value.len() == 6 && value.bytes().all(|b| b.is_ascii_digit()) {
+        Ok(())
+    } else {
+        Err(error("one_time_code", "Enter the 6-digit code from the email"))
+    }
+}
+
 /// No more than `MAX_IDS` ids in a relation list (tags, release commits).
 pub const MAX_IDS: usize = 500;
 

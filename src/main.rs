@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use anyhow::{Context, bail};
-use commitvault::{AppState, auth, build_app, config::Config, database, openapi};
+use commitvault::{AppState, auth, build_app, config::Config, database, mail::Mailer, openapi};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -57,8 +57,15 @@ async fn serve() -> anyhow::Result<()> {
     let cleanup =
         tokio::spawn(auth::session_store::PgSessionStore::new(pool.clone()).run_cleanup(Duration::from_secs(15 * 60)));
 
+    let mailer = Mailer::from_config(&config)?;
+    if mailer.is_enabled() {
+        tracing::info!("outgoing email enabled: new browsers confirm sign-in with an emailed code");
+    } else {
+        tracing::warn!("SMTP_HOST is not set: sign-in is password-only and password reset by email is unavailable");
+    }
+
     let addr = SocketAddr::new(config.host, config.port);
-    let app = build_app(AppState::new(pool.clone(), config));
+    let app = build_app(AppState::new(pool.clone(), config, mailer));
     let listener = TcpListener::bind(addr).await.with_context(|| format!("failed to bind {addr}"))?;
     tracing::info!(%addr, "CommitVault API listening");
 

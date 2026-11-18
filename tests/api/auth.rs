@@ -17,9 +17,11 @@ async fn protected_endpoints_require_a_session(pool: PgPool) {
 
 #[sqlx::test]
 async fn login_me_logout_flow(pool: PgPool) {
-    let mut app = TestApp::new(pool).await;
+    // Without outgoing email the password alone signs in.
+    let mut app = TestApp::without_email(pool).await;
 
     let login = app.login_as(ADMIN_EMAIL, ADMIN_PASSWORD).await.assert_status(StatusCode::OK);
+    assert_eq!(login.data()["status"], "authenticated");
     assert_eq!(login.data()["user"]["email"], ADMIN_EMAIL);
     assert!(login.data()["user"].get("password_hash").is_none(), "hash must never be serialised");
     assert_eq!(login.data()["csrf_token"].as_str().unwrap().len(), 64);
@@ -27,7 +29,7 @@ async fn login_me_logout_flow(pool: PgPool) {
     let me = app.get("/api/v1/auth/me").await.assert_status(StatusCode::OK);
     assert_eq!(me.data()["user"]["email"], ADMIN_EMAIL);
 
-    let stolen_cookie = app.session_cookie().map(str::to_owned);
+    let stolen_cookie = app.session_cookie();
     app.post("/api/v1/auth/logout", json!({})).await.assert_status(StatusCode::NO_CONTENT);
     app.get("/api/v1/auth/me").await.assert_status(StatusCode::UNAUTHORIZED);
 
@@ -343,4 +345,30 @@ async fn expired_sessions_stop_working_and_are_purged(pool: PgPool) {
 
     let store = commitvault::auth::session_store::PgSessionStore::new(app.pool.clone());
     assert_eq!(store.delete_expired().await.unwrap(), 1);
+}
+
+#[sqlx::test]
+async fn unchanged_sessions_are_not_rewritten_on_every_request(pool: PgPool) {
+    let mut app = TestApp::signed_in(pool.clone()).await;
+    let expiry = || async {
+        sqlx::query_scalar::<_, chrono::DateTime<chrono::Utc>>("SELECT expires_at FROM sessions WHERE data ? 'user_id'")
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+    };
+
+    // Stored expiry slightly behind the sliding expiry: a read leaves the row alone.
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '168 hours' - interval '1 minute'")
+        .execute(&app.pool)
+        .await
+        .unwrap();
+    let before = expiry().await;
+    app.get("/api/v1/auth/me").await.assert_status(StatusCode::OK);
+    assert_eq!(expiry().await, before, "an unchanged session must not be written");
+
+    // Far enough behind: the expiry is extended.
+    sqlx::query("UPDATE sessions SET expires_at = now() + interval '1 hour'").execute(&app.pool).await.unwrap();
+    let before = expiry().await;
+    app.get("/api/v1/auth/me").await.assert_status(StatusCode::OK);
+    assert!(expiry().await > before + chrono::Duration::hours(100), "sliding expiry still slides");
 }

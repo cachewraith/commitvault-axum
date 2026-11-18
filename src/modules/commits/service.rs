@@ -2,14 +2,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{
-    dto::{BranchSummary, CommitResponse, CreateCommitRequest, ListCommitsQuery, SHORT_HASH_LEN, UpdateCommitRequest},
+    dto::{CommitResponse, CreateCommitRequest, ListCommitsQuery, SHORT_HASH_LEN, UpdateCommitRequest},
     models::Commit,
     repository::{self, CommitFilter},
 };
 use crate::{
     errors::{AppError, AppResult},
     modules::{
-        projects,
+        branches, projects,
         tags::{self, models::TagTarget},
     },
     shared::{
@@ -20,7 +20,6 @@ use crate::{
 };
 
 const COMMIT: &str = "Commit";
-const MAX_BRANCHES: i64 = 200;
 
 pub async fn list(pool: &PgPool, query: ListCommitsQuery) -> AppResult<Paginated<CommitResponse>> {
     let page = Page::new(query.page, query.per_page);
@@ -30,7 +29,7 @@ pub async fn list(pool: &PgPool, query: ListCommitsQuery) -> AppResult<Paginated
         text_pattern: search.map(like_contains),
         // Only treat the search term as a hash prefix when it looks like one.
         search_hash_prefix: search.filter(|s| is_hex(s)).map(|s| like_prefix(&s.to_lowercase())),
-        branch: query.branch.map(|b| b.trim().to_owned()).filter(|b| !b.is_empty()),
+        branch_id: query.branch_id,
         hash_prefix: query
             .hash
             .as_deref()
@@ -65,7 +64,7 @@ pub async fn create(pool: &PgPool, project_id: Uuid, request: CreateCommitReques
     let commit = Commit {
         id: Uuid::now_v7(),
         project_id,
-        branch_name: request.branch_name,
+        branch_id: request.branch_id,
         commit_hash: request.commit_hash,
         short_hash,
         commit_message: request.commit_message,
@@ -76,6 +75,7 @@ pub async fn create(pool: &PgPool, project_id: Uuid, request: CreateCommitReques
     };
 
     let mut tx = pool.begin().await?;
+    branches::service::ensure_in_project(&mut tx, project_id, commit.branch_id).await?;
     // UNIQUE(project_id, commit_hash) turns a duplicate into a 409.
     repository::insert(&mut tx, &commit).await?;
     if let Some(tag_ids) = &request.tag_ids {
@@ -89,8 +89,11 @@ pub async fn update(pool: &PgPool, id: Uuid, request: UpdateCommitRequest) -> Ap
     let mut tx = pool.begin().await?;
     let mut commit = repository::find_for_update(&mut tx, id).await?.ok_or(AppError::NotFound(COMMIT))?;
 
-    if let Some(branch_name) = request.branch_name {
-        commit.branch_name = branch_name;
+    if let Some(branch_id) = request.branch_id
+        && branch_id != commit.branch_id
+    {
+        branches::service::ensure_in_project(&mut tx, commit.project_id, branch_id).await?;
+        commit.branch_id = branch_id;
     }
     let hash_changed = request.commit_hash.as_ref().is_some_and(|hash| *hash != commit.commit_hash);
     if let Some(commit_hash) = request.commit_hash {
@@ -136,11 +139,6 @@ pub async fn delete(pool: &PgPool, id: Uuid, cascade: bool) -> AppResult<()> {
     }
     tx.commit().await?;
     Ok(())
-}
-
-pub async fn branches(pool: &PgPool, project_id: Uuid) -> AppResult<Vec<BranchSummary>> {
-    projects::service::ensure_exists(pool, project_id).await?;
-    Ok(repository::branches(pool, project_id, MAX_BRANCHES).await?)
 }
 
 /// The abbreviation must actually abbreviate the hash it is shown for.

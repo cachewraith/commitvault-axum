@@ -31,11 +31,13 @@ src/
   database/          pool + embedded migrations
   errors/            AppError → JSON error envelope (the only place errors become HTTP)
   middleware/        require_auth, csrf_protect, security headers, client IP
-  auth/              login/logout/me/password, Argon2id, PgSessionStore, rate limiter, bootstrap
+  auth/              login (+ emailed code, trusted devices)/logout/me/password/reset, Argon2id,
+                     PgSessionStore, rate limiter, bootstrap
+  mail.rs            outgoing email (SMTP via lettre; Disabled without SMTP_HOST; Memory in tests)
   shared/            pagination, response envelopes, extractors, validation rules,
                      rich-text sanitiser, serde helpers, SQL fragments, embedded refs
-  modules/<feature>/ projects, environments, commits, deployments, releases, notes, tags,
-                     dashboard, search
+  modules/<feature>/ projects, environments, branches, commits, deployments, releases, notes,
+                     tags, dashboard, search
 migrations/          SQL migrations (embedded into the binary)
 tests/api/           integration tests (one binary; `common.rs` is the harness)
 .sqlx/               offline query metadata — committed
@@ -86,11 +88,17 @@ Handlers never contain business logic; services never build SQL; repositories ne
   no record exists, and never output "ahead"/"behind": there is no Git ancestry data.
   (`deployments::service::COMPARISON_NOTICE`, tests in `tests/api/deployments.rs`.)
 - CommitVault never runs Git, SSH, or any stored command. Deployment notes are plain text documentation.
-- `UNIQUE(project_id, commit_hash)`; deployments and release commits can only reference rows of their own
-  project (composite foreign keys). Deleting a commit/environment with deployment history needs
-  `?cascade=true`.
+- `UNIQUE(project_id, commit_hash)`; commits, deployments and release commits can only reference rows of
+  their own project (composite foreign keys). Deleting a commit/environment with deployment history, or a
+  branch with commits, needs `?cascade=true`.
+- A commit references an existing branch (`branch_id`); recording a commit never creates a branch. A new
+  project gets a branch named after its `default_branch`.
 - Single user: there is no registration endpoint and no per-record ownership. Every feature route sits
-  behind `require_auth`; only `/health` and `/auth/{csrf,login,logout}` are public.
+  behind `require_auth`; only `/health` and the sign-in endpoints (`/auth/{csrf,options,login,login/verify,
+  login/resend,logout,password/forgot,password/reset}`) are public.
+- A *pending* session (password ok, emailed code outstanding) holds `pending_user_id`, never `user_id`.
+  One-time codes and device tokens are stored hashed and never logged. Integration tests run with
+  `Mailer::memory()`; `TestApp::login()` completes the code step, `TestApp::without_email()` disables it.
 
 ## Security checklist for changes
 

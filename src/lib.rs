@@ -7,6 +7,7 @@ pub mod auth;
 pub mod config;
 pub mod database;
 pub mod errors;
+pub mod mail;
 pub mod middleware;
 pub mod modules;
 pub mod openapi;
@@ -39,6 +40,7 @@ use crate::{
     auth::{rate_limit::LoginRateLimiter, session_store::PgSessionStore},
     config::Config,
     errors::AppError,
+    mail::Mailer,
 };
 
 /// Largest accepted request body. Rich-text documents are the biggest payloads.
@@ -51,11 +53,12 @@ pub struct AppState {
     pub db: PgPool,
     pub config: Arc<Config>,
     pub login_limiter: Arc<LoginRateLimiter>,
+    pub mailer: Mailer,
 }
 
 impl AppState {
-    pub fn new(db: PgPool, config: Config) -> Self {
-        Self { db, config: Arc::new(config), login_limiter: Arc::new(LoginRateLimiter::default()) }
+    pub fn new(db: PgPool, config: Config, mailer: Mailer) -> Self {
+        Self { db, config: Arc::new(config), login_limiter: Arc::new(LoginRateLimiter::default()), mailer }
     }
 }
 

@@ -4,14 +4,21 @@
 //! drives the real router in-process (no network), so the whole stack —
 //! middleware, sessions, CSRF, validation, SQL — is exercised.
 
-use std::collections::HashMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     Router,
     body::Body,
     http::{HeaderMap, Method, Request, StatusCode, header},
 };
-use commitvault::{AppState, auth, build_app, config::Config};
+use commitvault::{
+    AppState, auth, build_app,
+    config::Config,
+    mail::{Mailer, OutgoingEmail},
+};
 use http_body_util::BodyExt;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -62,24 +69,39 @@ impl TestResponse {
     }
 }
 
-/// A browser-like client: keeps the session cookie and CSRF token.
+/// A browser-like client: keeps its cookies (session, trusted device) and
+/// CSRF token. Outgoing email lands in `outbox`.
 pub struct TestApp {
     pub pool: PgPool,
     router: Router,
-    cookie: Option<String>,
+    cookies: BTreeMap<String, String>,
     pub csrf_token: Option<String>,
+    pub outbox: Arc<Mutex<Vec<OutgoingEmail>>>,
 }
 
+const SESSION_COOKIE: &str = "cv_session";
+
 impl TestApp {
-    /// App with the bootstrap administrator created, not signed in.
+    /// App with the bootstrap administrator created, not signed in. Email is
+    /// "configured" (kept in memory), so new browsers get the code step.
     pub async fn new(pool: PgPool) -> Self {
         Self::with_config(pool, test_config(&[])).await
     }
 
     pub async fn with_config(pool: PgPool, config: Config) -> Self {
+        let (mailer, outbox) = Mailer::memory();
+        Self::with_mailer(pool, config, mailer, outbox).await
+    }
+
+    /// App without outgoing email: password-only sign-in, no password reset.
+    pub async fn without_email(pool: PgPool) -> Self {
+        Self::with_mailer(pool, test_config(&[]), Mailer::Disabled, Arc::default()).await
+    }
+
+    async fn with_mailer(pool: PgPool, config: Config, mailer: Mailer, outbox: Arc<Mutex<Vec<OutgoingEmail>>>) -> Self {
         auth::bootstrap::ensure_admin(&pool, &config).await.expect("bootstrap admin");
-        let router = build_app(AppState::new(pool.clone(), config));
-        Self { pool, router, cookie: None, csrf_token: None }
+        let router = build_app(AppState::new(pool.clone(), config, mailer));
+        Self { pool, router, cookies: BTreeMap::new(), csrf_token: None, outbox }
     }
 
     /// App signed in as the administrator.
@@ -91,7 +113,32 @@ impl TestApp {
 
     /// A second, independent browser against the same server.
     pub fn new_client(&self) -> Self {
-        Self { pool: self.pool.clone(), router: self.router.clone(), cookie: None, csrf_token: None }
+        Self {
+            pool: self.pool.clone(),
+            router: self.router.clone(),
+            cookies: BTreeMap::new(),
+            csrf_token: None,
+            outbox: Arc::clone(&self.outbox),
+        }
+    }
+
+    /// The emails sent so far.
+    pub fn sent(&self) -> Vec<OutgoingEmail> {
+        self.outbox.lock().unwrap().clone()
+    }
+
+    /// The six-digit code in the most recent email.
+    pub fn last_code(&self) -> String {
+        let sent = self.sent();
+        let body = &sent.last().expect("an email was sent").body;
+        body.split_whitespace()
+            .find(|word| word.len() == 6 && word.bytes().all(|b| b.is_ascii_digit()))
+            .expect("email contains a code")
+            .to_owned()
+    }
+
+    pub fn has_cookie(&self, name: &str) -> bool {
+        self.cookies.contains_key(name)
     }
 
     pub async fn fetch_csrf(&mut self) -> String {
@@ -101,8 +148,21 @@ impl TestApp {
         token
     }
 
+    /// Signs in, completing the emailed-code step when it is asked for.
     pub async fn login(&mut self) {
-        self.login_as(ADMIN_EMAIL, ADMIN_PASSWORD).await.assert_status(StatusCode::OK);
+        let response = self.login_as(ADMIN_EMAIL, ADMIN_PASSWORD).await.assert_status(StatusCode::OK);
+        if response.data()["status"] == "code_required" {
+            let code = self.last_code();
+            self.verify_code(&code).await.assert_status(StatusCode::OK);
+        }
+    }
+
+    pub async fn verify_code(&mut self, code: &str) -> TestResponse {
+        let response = self.post("/api/v1/auth/login/verify", serde_json::json!({ "code": code })).await;
+        if let Some(token) = response.body["data"]["csrf_token"].as_str() {
+            self.csrf_token = Some(token.to_owned());
+        }
+        response
     }
 
     pub async fn login_as(&mut self, email: &str, password: &str) -> TestResponse {
@@ -117,12 +177,16 @@ impl TestApp {
         response
     }
 
-    pub fn session_cookie(&self) -> Option<&str> {
-        self.cookie.as_deref()
+    /// The session cookie as `name=value`.
+    pub fn session_cookie(&self) -> Option<String> {
+        self.cookies.get(SESSION_COOKIE).map(|value| format!("{SESSION_COOKIE}={value}"))
     }
 
     pub fn set_session_cookie(&mut self, cookie: Option<String>) {
-        self.cookie = cookie;
+        match cookie.as_deref().and_then(|pair| pair.split_once('=')) {
+            Some((_, value)) => self.cookies.insert(SESSION_COOKIE.to_owned(), value.to_owned()),
+            None => self.cookies.remove(SESSION_COOKIE),
+        };
     }
 
     pub async fn get(&mut self, path: &str) -> TestResponse {
@@ -155,8 +219,9 @@ impl TestApp {
         extra_headers: &[(&str, &str)],
     ) -> TestResponse {
         let mut headers: Vec<(String, String)> = Vec::new();
-        if let Some(cookie) = &self.cookie {
-            headers.push((header::COOKIE.to_string(), cookie.clone()));
+        if !self.cookies.is_empty() {
+            let cookie = self.cookies.iter().map(|(name, value)| format!("{name}={value}")).collect::<Vec<_>>();
+            headers.push((header::COOKIE.to_string(), cookie.join("; ")));
         }
         if !matches!(method, Method::GET | Method::HEAD) {
             headers.push((header::ORIGIN.to_string(), ORIGIN.to_owned()));
@@ -190,8 +255,13 @@ impl TestApp {
         for set_cookie in headers.get_all(header::SET_COOKIE) {
             let raw = set_cookie.to_str().unwrap_or_default();
             let pair = raw.split(';').next().unwrap_or_default().trim();
-            let cleared = pair.ends_with('=') || raw.to_ascii_lowercase().contains("max-age=0");
-            self.cookie = if cleared { None } else { Some(pair.to_owned()) };
+            let Some((name, value)) = pair.split_once('=') else { continue };
+            let cleared = value.is_empty() || raw.to_ascii_lowercase().contains("max-age=0");
+            if cleared {
+                self.cookies.remove(name);
+            } else {
+                self.cookies.insert(name.to_owned(), value.to_owned());
+            }
         }
 
         let bytes = response.into_body().collect().await.expect("response body").to_bytes();
@@ -214,6 +284,25 @@ impl TestApp {
             .id()
     }
 
+    pub async fn create_branch(&mut self, project_id: &str, name: &str) -> String {
+        self.post(&format!("/api/v1/projects/{project_id}/branches"), serde_json::json!({ "name": name }))
+            .await
+            .assert_status(StatusCode::CREATED)
+            .id()
+    }
+
+    /// Id of the project's branch called `name`, created if missing.
+    pub async fn branch_id(&mut self, project_id: &str, name: &str) -> String {
+        let list = self.get(&format!("/api/v1/projects/{project_id}/branches?per_page=100")).await;
+        let existing = list.data().as_array().and_then(|branches| {
+            branches.iter().find(|b| b["name"] == name).map(|b| b["id"].as_str().unwrap().to_owned())
+        });
+        match existing {
+            Some(id) => id,
+            None => self.create_branch(project_id, name).await,
+        }
+    }
+
     /// `seed` becomes the first hex digit of a 40-character hash.
     pub async fn create_commit(&mut self, project_id: &str, seed: char, message: &str) -> String {
         self.create_commit_with(
@@ -228,7 +317,13 @@ impl TestApp {
         .await
     }
 
-    pub async fn create_commit_with(&mut self, project_id: &str, body: Value) -> String {
+    /// A `branch_name` in `body` is a test convenience: it is replaced by the
+    /// id of that branch (created on first use).
+    pub async fn create_commit_with(&mut self, project_id: &str, mut body: Value) -> String {
+        if let Some(name) = body.as_object_mut().and_then(|o| o.remove("branch_name")) {
+            let id = self.branch_id(project_id, name.as_str().unwrap()).await;
+            body["branch_id"] = Value::String(id);
+        }
         self.post(&format!("/api/v1/projects/{project_id}/commits"), body).await.assert_status(StatusCode::CREATED).id()
     }
 

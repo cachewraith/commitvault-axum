@@ -8,7 +8,7 @@ use crate::{
     modules::deployments::models::DeploymentStatus,
     shared::{
         pagination::SortOrder,
-        refs::{ProjectRef, ReleaseRef, TagRef},
+        refs::{BranchRef, ProjectRef, ReleaseRef, TagRef},
         serde_helpers, validation,
     },
 };
@@ -17,9 +17,8 @@ pub const SHORT_HASH_LEN: usize = 7;
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateCommitRequest {
-    #[validate(custom(function = "validation::branch_name"))]
-    #[serde(deserialize_with = "serde_helpers::trimmed")]
-    pub branch_name: String,
+    /// A branch of the same project (`POST /projects/{project_id}/branches` creates one).
+    pub branch_id: Uuid,
     /// Full or abbreviated hash: 7–64 hex characters (stored lower-case).
     #[validate(custom(function = "validation::commit_hash"))]
     #[serde(deserialize_with = "serde_helpers::lowercase")]
@@ -49,9 +48,9 @@ pub struct CreateCommitRequest {
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct UpdateCommitRequest {
-    #[validate(custom(function = "validation::branch_name"))]
-    #[serde(default, deserialize_with = "serde_helpers::trimmed_opt")]
-    pub branch_name: Option<String>,
+    /// Move the commit to another branch of the same project.
+    #[serde(default)]
+    pub branch_id: Option<Uuid>,
     #[validate(custom(function = "validation::commit_hash"))]
     #[serde(default, deserialize_with = "serde_helpers::lowercase_opt")]
     pub commit_hash: Option<String>,
@@ -121,12 +120,11 @@ pub enum CommitSort {
 #[into_params(parameter_in = Query)]
 pub struct ListCommitsQuery {
     pub project_id: Option<Uuid>,
-    /// Matches message, description, branch, author and hash prefix.
+    /// Matches message, description, branch name, author and hash prefix.
     #[validate(length(max = 200))]
     pub search: Option<String>,
-    /// Exact branch name.
-    #[validate(length(max = 255))]
-    pub branch: Option<String>,
+    /// Commits of this branch.
+    pub branch_id: Option<Uuid>,
     /// Hash prefix.
     #[validate(length(max = 64))]
     pub hash: Option<String>,
@@ -162,7 +160,9 @@ pub struct CommitResponse {
     pub project_id: Uuid,
     #[sqlx(json)]
     pub project: ProjectRef,
-    pub branch_name: String,
+    pub branch_id: Uuid,
+    #[sqlx(json)]
+    pub branch: BranchRef,
     pub commit_hash: String,
     pub short_hash: String,
     pub commit_message: String,
@@ -194,11 +194,4 @@ pub struct CommitEnvironment {
     pub deployment_count: i64,
     pub latest_status: DeploymentStatus,
     pub latest_deployed_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
-pub struct BranchSummary {
-    pub name: String,
-    pub commit_count: i64,
-    pub last_commit_at: DateTime<Utc>,
 }

@@ -4,6 +4,8 @@
 mod common;
 
 mod auth;
+mod auth_codes;
+mod branches;
 mod commits;
 mod constraints;
 mod dashboard_search;

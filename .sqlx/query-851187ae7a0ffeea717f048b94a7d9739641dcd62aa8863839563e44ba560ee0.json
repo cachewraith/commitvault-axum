@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH changed AS (\n                 UPDATE sessions SET data = $2, expires_at = $3\n                 WHERE id = $1\n                   AND (data IS DISTINCT FROM $2 OR expires_at > $3 OR expires_at < $3 - $4::interval)\n             )\n             INSERT INTO sessions (id, data, expires_at)\n             SELECT $1::text, $2::jsonb, $3::timestamptz\n             WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE id = $1)\n             ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "851187ae7a0ffeea717f048b94a7d9739641dcd62aa8863839563e44ba560ee0"
+}

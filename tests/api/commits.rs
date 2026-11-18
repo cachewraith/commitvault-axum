@@ -8,13 +8,14 @@ use crate::common::{TestApp, commit_hash, ids};
 async fn commit_crud_lifecycle(pool: PgPool) {
     let mut app = TestApp::signed_in(pool).await;
     let project = app.create_project("Shop").await;
+    let checkout = app.create_branch(&project, "feature/checkout").await;
     let hash = "A1B2C3D4E5F60718293A4B5C6D7E8F9012345678";
 
     let created = app
         .post(
             &format!("/api/v1/projects/{project}/commits"),
             json!({
-                "branch_name": "feature/checkout",
+                "branch_id": checkout,
                 "commit_hash": hash,
                 "commit_message": "feat: add checkout flow",
                 "description": "Adds the three-step checkout.",
@@ -30,6 +31,8 @@ async fn commit_crud_lifecycle(pool: PgPool) {
     assert_eq!(commit["short_hash"], "a1b2c3d");
     assert_eq!(commit["commit_date"], "2026-03-01T03:00:00Z", "timestamps are normalised to UTC");
     assert_eq!(commit["project"]["name"], "Shop");
+    assert_eq!(commit["branch_id"], checkout.as_str());
+    assert_eq!(commit["branch"]["name"], "feature/checkout");
     assert_eq!(commit["deployment_count"], 0);
     assert_eq!(commit["environments"], json!([]));
     assert_eq!(commit["releases"], json!([]));
@@ -41,7 +44,19 @@ async fn commit_crud_lifecycle(pool: PgPool) {
         .assert_status(StatusCode::OK);
     assert_eq!(updated.data()["commit_message"], "feat: checkout");
     assert_eq!(updated.data()["author_name"], json!(null));
-    assert_eq!(updated.data()["branch_name"], "feature/checkout");
+    assert_eq!(updated.data()["branch"]["name"], "feature/checkout");
+
+    // Moving to another branch of the same project; never to another project's branch.
+    let main = app.branch_id(&project, "main").await;
+    let moved = app.patch(&format!("/api/v1/commits/{id}"), json!({ "branch_id": main })).await;
+    assert_eq!(moved.assert_status(StatusCode::OK).data()["branch"]["name"], "main");
+    let other_project = app.create_project("Blog").await;
+    let foreign = app.branch_id(&other_project, "main").await;
+    let rejected = app
+        .patch(&format!("/api/v1/commits/{id}"), json!({ "branch_id": foreign }))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(rejected.body["error"]["details"]["branch_id"].is_array());
 
     // Changing the hash re-derives the abbreviation.
     let rehashed = app.patch(&format!("/api/v1/commits/{id}"), json!({ "commit_hash": commit_hash('f') })).await;
@@ -59,10 +74,11 @@ async fn duplicate_hash_is_rejected_within_a_project_but_allowed_across_projects
     let original = app.create_commit(&first, 'a', "original").await;
     let other = app.create_commit(&first, 'b', "other").await;
 
+    let main = app.branch_id(&first, "main").await;
     let duplicate = app
         .post(
             &format!("/api/v1/projects/{first}/commits"),
-            json!({ "branch_name": "main", "commit_hash": commit_hash('a').to_uppercase(), "commit_message": "dup", "commit_date": "2026-03-01T10:00:00Z" }),
+            json!({ "branch_id": main, "commit_hash": commit_hash('a').to_uppercase(), "commit_message": "dup", "commit_date": "2026-03-01T10:00:00Z" }),
         )
         .await
         .assert_status(StatusCode::CONFLICT);
@@ -83,12 +99,13 @@ async fn commit_validation(pool: PgPool) {
     let mut app = TestApp::signed_in(pool).await;
     let project = app.create_project("Shop").await;
     let path = format!("/api/v1/projects/{project}/commits");
+    let main = app.branch_id(&project, "main").await;
 
     let invalid = app
         .post(
             &path,
             json!({
-                "branch_name": "has space",
+                "branch_id": main,
                 "commit_hash": "xyz",
                 "commit_message": "",
                 "commit_date": "2026-03-01T10:00:00Z",
@@ -98,28 +115,35 @@ async fn commit_validation(pool: PgPool) {
         .await
         .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
     let details = &invalid.body["error"]["details"];
-    for field in ["branch_name", "commit_hash", "commit_message", "external_url"] {
+    for field in ["commit_hash", "commit_message", "external_url"] {
         assert!(details[field].is_array(), "missing error for {field}: {details}");
     }
 
     let wrong_short = app
         .post(
             &path,
-            json!({ "branch_name": "main", "commit_hash": commit_hash('a'), "short_hash": "bbbbbbb", "commit_message": "x", "commit_date": "2026-03-01T10:00:00Z" }),
+            json!({ "branch_id": main, "commit_hash": commit_hash('a'), "short_hash": "bbbbbbb", "commit_message": "x", "commit_date": "2026-03-01T10:00:00Z" }),
         )
         .await
         .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
     assert!(wrong_short.body["error"]["details"]["short_hash"].is_array());
 
     let missing_date = app
-        .post(&path, json!({ "branch_name": "main", "commit_hash": commit_hash('a'), "commit_message": "x" }))
+        .post(&path, json!({ "branch_id": main, "commit_hash": commit_hash('a'), "commit_message": "x" }))
         .await
         .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(missing_date.error_code(), "validation_failed");
 
-    app.post(&format!("/api/v1/projects/{}/commits", uuid::Uuid::now_v7()), json!({ "branch_name": "main", "commit_hash": commit_hash('a'), "commit_message": "x", "commit_date": "2026-03-01T10:00:00Z" }))
+    app.post(&format!("/api/v1/projects/{}/commits", uuid::Uuid::now_v7()), json!({ "branch_id": main, "commit_hash": commit_hash('a'), "commit_message": "x", "commit_date": "2026-03-01T10:00:00Z" }))
         .await
         .assert_status(StatusCode::NOT_FOUND);
+
+    // A branch that does not exist (or belongs elsewhere) is a field error.
+    let unknown = app
+        .post(&path, json!({ "branch_id": uuid::Uuid::now_v7(), "commit_hash": commit_hash('a'), "commit_message": "x", "commit_date": "2026-03-01T10:00:00Z" }))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(unknown.body["error"]["details"]["branch_id"].is_array());
 }
 
 #[sqlx::test]
@@ -150,7 +174,8 @@ async fn commit_list_search_and_filters(pool: PgPool) {
     assert_eq!(ids(&app.get("/api/v1/commits?search=LOGIN").await), [fix.clone(), login.clone()]);
     // Branch search and exact branch filter.
     assert_eq!(ids(&app.get("/api/v1/commits?search=feature/").await), [cart.clone(), login.clone()]);
-    assert_eq!(ids(&app.get("/api/v1/commits?branch=main").await), [post.clone(), fix.clone()]);
+    let shop_main = app.branch_id(&shop, "main").await;
+    assert_eq!(ids(&app.get(&format!("/api/v1/commits?branch_id={shop_main}")).await), [fix.as_str()]);
     // Hash prefix, via the dedicated filter and via the search box.
     let prefix = &commit_hash('b')[..10];
     assert_eq!(ids(&app.get(&format!("/api/v1/commits?hash={}", prefix.to_uppercase())).await), [cart.as_str()]);
@@ -164,12 +189,6 @@ async fn commit_list_search_and_filters(pool: PgPool) {
     let oldest_first = app.get("/api/v1/commits?sort=commit_date&order=asc&per_page=1").await;
     assert_eq!(ids(&oldest_first), [login.as_str()]);
     assert_eq!(oldest_first.body["meta"]["total"], 4);
-
-    // Branch summary for autocompletion: most recently used first.
-    let branches = app.get(&format!("/api/v1/projects/{shop}/branches")).await.assert_status(StatusCode::OK);
-    let names: Vec<&str> = branches.data().as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["main", "feature/cart", "feature/login"]);
-    assert_eq!(branches.data()[0]["commit_count"], 1);
 }
 
 #[sqlx::test]

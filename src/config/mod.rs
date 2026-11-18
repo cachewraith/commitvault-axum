@@ -52,6 +52,31 @@ pub struct Config {
     pub frontend_origins: Vec<String>,
     pub trust_proxy: bool,
     pub enable_api_docs: bool,
+    /// Outgoing email. Without it there is no second sign-in step and no
+    /// password reset by email.
+    pub smtp: Option<SmtpConfig>,
+}
+
+/// How the SMTP connection is secured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmtpTls {
+    /// Plain connection upgraded with STARTTLS (usually port 587). Required, not opportunistic.
+    StartTls,
+    /// TLS from the first byte (usually port 465).
+    Tls,
+    /// No encryption — only for a local relay or a development mail catcher.
+    None,
+}
+
+#[derive(Debug, Clone)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: u16,
+    pub tls: SmtpTls,
+    pub username: Option<String>,
+    pub password: Option<Secret>,
+    /// Sender, e.g. `CommitVault <vault@example.com>`.
+    pub from: String,
 }
 
 const MIN_SESSION_SECRET_LEN: usize = 64;
@@ -115,6 +140,7 @@ impl Config {
             frontend_origins,
             trust_proxy: parse_bool("TRUST_PROXY", get("TRUST_PROXY"), false)?,
             enable_api_docs: parse_bool("ENABLE_API_DOCS", get("ENABLE_API_DOCS"), !env.is_production())?,
+            smtp: smtp_config(&get)?,
         };
         config.validate_for_environment()?;
         Ok(config)
@@ -139,6 +165,12 @@ impl Config {
         if let Some(origin) = self.frontend_origins.iter().find(|o| !o.starts_with("https://")) {
             bail!("FRONTEND_ORIGIN must use https in production, got `{origin}`");
         }
+        if let Some(smtp) = &self.smtp
+            && smtp.tls == SmtpTls::None
+            && smtp.password.is_some()
+        {
+            bail!("SMTP_TLS=none would send the SMTP password unencrypted; use starttls or tls in production");
+        }
         Ok(())
     }
 
@@ -146,6 +178,44 @@ impl Config {
         // The `__Host-` prefix makes browsers enforce Secure + Path=/ + no Domain.
         if self.cookie_secure { "__Host-cv_session" } else { "cv_session" }
     }
+
+    /// Cookie marking a browser that completed the emailed-code step.
+    pub fn device_cookie_name(&self) -> &'static str {
+        if self.cookie_secure { "__Host-cv_device" } else { "cv_device" }
+    }
+}
+
+/// `SMTP_HOST` switches outgoing email on; everything else then has defaults
+/// except the sender address.
+fn smtp_config(get: &impl Fn(&str) -> Option<String>) -> Result<Option<SmtpConfig>> {
+    let Some(host) = get("SMTP_HOST") else {
+        return Ok(None);
+    };
+    let tls = match get("SMTP_TLS").map(|v| v.to_ascii_lowercase()).as_deref() {
+        None | Some("starttls") => SmtpTls::StartTls,
+        Some("tls" | "ssl" | "implicit") => SmtpTls::Tls,
+        Some("none" | "off") => SmtpTls::None,
+        Some(other) => bail!("SMTP_TLS must be `starttls`, `tls` or `none`, got `{other}`"),
+    };
+    let default_port = match tls {
+        SmtpTls::StartTls => 587,
+        SmtpTls::Tls => 465,
+        SmtpTls::None => 25,
+    };
+    let port = match get("SMTP_PORT") {
+        Some(port) => port.parse().context("SMTP_PORT must be a port number")?,
+        None => default_port,
+    };
+    let username = get("SMTP_USERNAME");
+    let password = get("SMTP_PASSWORD").map(Secret::new);
+    if username.is_some() != password.is_some() {
+        bail!("set both SMTP_USERNAME and SMTP_PASSWORD, or neither");
+    }
+    let from = get("SMTP_FROM").context("SMTP_FROM must be set when SMTP_HOST is set")?;
+    if !from.contains('@') {
+        bail!("SMTP_FROM must contain an email address, e.g. `CommitVault <vault@example.com>`");
+    }
+    Ok(Some(SmtpConfig { host, port, tls, username, password, from }))
 }
 
 fn parse_bool(key: &str, value: Option<String>, default: bool) -> Result<bool> {
@@ -228,6 +298,33 @@ mod tests {
         vars.insert("FRONTEND_ORIGIN", "http://localhost:5173/, https://a.example.com/app".into());
         let config = load(&vars).unwrap();
         assert_eq!(config.frontend_origins, vec!["http://localhost:5173", "https://a.example.com"]);
+    }
+
+    #[test]
+    fn smtp_is_optional_and_validated() {
+        assert!(load(&base()).unwrap().smtp.is_none());
+
+        let mut vars = base();
+        vars.insert("SMTP_HOST", "smtp.example.com".into());
+        assert!(load(&vars).unwrap_err().to_string().contains("SMTP_FROM"));
+
+        vars.insert("SMTP_FROM", "CommitVault <vault@example.com>".into());
+        let smtp = load(&vars).unwrap().smtp.unwrap();
+        assert_eq!((smtp.port, smtp.tls), (587, SmtpTls::StartTls));
+
+        vars.insert("SMTP_TLS", "tls".into());
+        assert_eq!(load(&vars).unwrap().smtp.unwrap().port, 465);
+
+        vars.insert("SMTP_USERNAME", "vault".into());
+        assert!(load(&vars).is_err(), "username without password");
+        vars.insert("SMTP_PASSWORD", "smtp-secret-value".into());
+        let config = load(&vars).unwrap();
+        assert!(!format!("{config:?}").contains("smtp-secret-value"));
+
+        vars.insert("SMTP_TLS", "none".into());
+        vars.insert("APP_ENV", "production".into());
+        vars.insert("FRONTEND_ORIGIN", "https://vault.example.com".into());
+        assert!(load(&vars).unwrap_err().to_string().contains("SMTP_TLS"));
     }
 
     #[test]

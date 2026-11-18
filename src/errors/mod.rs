@@ -36,6 +36,10 @@ pub enum AppError {
     Conflict { message: String, details: FieldErrors },
     #[error("Validation failed")]
     Validation(FieldErrors),
+    #[error("This sign-in attempt has expired. Sign in again.")]
+    SignInExpired,
+    #[error("Outgoing email is not configured, so codes cannot be sent.")]
+    EmailUnavailable,
     #[error("Too many attempts. Try again later.")]
     RateLimited { retry_after_secs: u64 },
     #[error("database error")]
@@ -63,7 +67,8 @@ impl AppError {
     fn status(&self) -> StatusCode {
         match self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Unauthorized | Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
+            Self::Unauthorized | Self::InvalidCredentials | Self::SignInExpired => StatusCode::UNAUTHORIZED,
+            Self::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
             Self::Forbidden(_) | Self::CsrfInvalid => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Conflict { .. } => StatusCode::CONFLICT,
@@ -78,6 +83,8 @@ impl AppError {
             Self::BadRequest(_) => "bad_request",
             Self::Unauthorized => "unauthorized",
             Self::InvalidCredentials => "invalid_credentials",
+            Self::SignInExpired => "sign_in_expired",
+            Self::EmailUnavailable => "email_unavailable",
             Self::Forbidden(_) => "forbidden",
             Self::CsrfInvalid => "csrf_invalid",
             Self::NotFound(_) => "not_found",
@@ -174,6 +181,9 @@ fn unique_violation(constraint: &str) -> AppError {
         "environments_project_slug_key" => {
             AppError::field_conflict("name", "This project already has an environment with this name")
         }
+        "branches_project_name_key" => {
+            AppError::field_conflict("name", "This project already has a branch with this name")
+        }
         "commits_project_hash_key" => {
             AppError::field_conflict("commit_hash", "This commit hash is already recorded for this project")
         }
@@ -193,6 +203,9 @@ fn foreign_key_violation(constraint: &str) -> AppError {
         }
         "deployments_environment_fkey" => AppError::conflict(
             "This environment has recorded deployments. Delete them first or confirm cascading deletion.",
+        ),
+        "commits_branch_fkey" => AppError::conflict(
+            "This branch has recorded commits. Move or delete them first, or confirm cascading deletion.",
         ),
         _ => AppError::conflict("The operation conflicts with related records"),
     }

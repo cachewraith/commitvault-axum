@@ -1,6 +1,7 @@
 //! Feature modules. Each owns its routes, handlers, service, repository,
 //! models and DTOs.
 
+pub mod branches;
 pub mod commits;
 pub mod dashboard;
 pub mod deployments;
@@ -21,6 +22,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .merge(dashboard::routes::router())
         .merge(projects::routes::router())
         .merge(environments::routes::router())
+        .merge(branches::routes::router())
         .merge(commits::routes::router())
         .merge(deployments::routes::router())
         .merge(releases::routes::router())

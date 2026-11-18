@@ -32,6 +32,10 @@ Generate a session secret with `openssl rand -hex 48`.
 | `COOKIE_SECURE` | `false` dev, `true` prod | |
 | `SESSION_TTL_HOURS` | `168` | idle timeout |
 | `TRUST_PROXY` | `false` | set `true` behind a reverse proxy |
+| `SMTP_HOST` | — | enables outgoing email: emailed sign-in code for new browsers, password reset |
+| `SMTP_TLS` / `SMTP_PORT` | `starttls` / `587` | `tls` → 465; `none` → 25 (refused in production with a password) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | — | both or neither |
+| `SMTP_FROM` | — | required with `SMTP_HOST`, e.g. `CommitVault <vault@example.com>` |
 
 ## Commands
 

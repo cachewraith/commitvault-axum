@@ -22,6 +22,12 @@ pub struct EnvironmentRef {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BranchRef {
+    pub id: Uuid,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CommitBrief {
     pub id: Uuid,
     pub short_hash: String,

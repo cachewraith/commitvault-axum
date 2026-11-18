@@ -46,10 +46,10 @@ pub async fn commits(pool: &PgPool, params: &SearchParams<'_>) -> sqlx::Result<V
     // `$4` is NULL unless the term looks like a hash; `LIKE NULL` is then
     // NULL (no match), and hash-prefix matches sort first when present.
     let sql = format!(
-        "SELECT c.id, c.commit_message AS title, c.short_hash || ' · ' || c.branch_name AS subtitle, \
+        "SELECT c.id, c.commit_message AS title, c.short_hash || ' · ' || b.name AS subtitle, \
                 {PROJECT_REF_JSON} AS project, c.commit_date AS occurred_at \
-         FROM commits c JOIN projects p ON p.id = c.project_id \
-         WHERE (c.commit_message ILIKE $1 OR c.branch_name ILIKE $1 OR c.author_name ILIKE $1 \
+         FROM commits c JOIN projects p ON p.id = c.project_id JOIN branches b ON b.id = c.branch_id \
+         WHERE (c.commit_message ILIKE $1 OR b.name ILIKE $1 OR c.author_name ILIKE $1 \
                 OR c.description ILIKE $1 OR c.commit_hash LIKE $4::text) \
            AND ($2::uuid IS NULL OR c.project_id = $2) \
          ORDER BY coalesce(c.commit_hash LIKE $4::text, false) DESC, c.commit_date DESC LIMIT $3"

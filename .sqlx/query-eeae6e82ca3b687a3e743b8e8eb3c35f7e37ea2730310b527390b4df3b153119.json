@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE commits\n         SET branch_id = $2, commit_hash = $3, short_hash = $4, commit_message = $5, description = $6,\n             commit_date = $7, author_name = $8, external_url = $9\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eeae6e82ca3b687a3e743b8e8eb3c35f7e37ea2730310b527390b4df3b153119"
+}

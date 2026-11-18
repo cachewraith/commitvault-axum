@@ -7,7 +7,12 @@ use crate::AppState;
 pub fn public_router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(handlers::csrf))
+        .routes(routes!(handlers::options))
         .routes(routes!(handlers::login))
+        .routes(routes!(handlers::verify_login_code))
+        .routes(routes!(handlers::resend_login_code))
+        .routes(routes!(handlers::forgot_password))
+        .routes(routes!(handlers::reset_password))
         .routes(routes!(handlers::logout))
 }
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, project_id, branch_name, commit_hash, short_hash, commit_message, description,\n                commit_date, author_name, external_url\n         FROM commits WHERE id = $1 FOR UPDATE",
+  "query": "SELECT id, project_id, branch_id, commit_hash, short_hash, commit_message, description,\n                commit_date, author_name, external_url\n         FROM commits WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -27,12 +27,12 @@
       },
       {
         "ordinal": 2,
-        "name": "branch_name",
-        "type_info": "Text",
+        "name": "branch_id",
+        "type_info": "Uuid",
         "origin": {
           "Table": {
             "table": "commits",
-            "name": "branch_name"
+            "name": "branch_id"
           }
         }
       },
@@ -132,5 +132,5 @@
       true
     ]
   },
-  "hash": "0e948f4b5f499d18c8bc79765cb5727329be9a15cb7f40b541cca7a1e189b72a"
+  "hash": "9a4c91895aa91d20ce92a1cc078ef4c47f51d1a73785898f0f7b152a7bcaa8a1"
 }

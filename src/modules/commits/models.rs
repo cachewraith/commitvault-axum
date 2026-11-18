@@ -6,7 +6,7 @@ use uuid::Uuid;
 pub struct Commit {
     pub id: Uuid,
     pub project_id: Uuid,
-    pub branch_name: String,
+    pub branch_id: Uuid,
     pub commit_hash: String,
     pub short_hash: String,
     pub commit_message: String,

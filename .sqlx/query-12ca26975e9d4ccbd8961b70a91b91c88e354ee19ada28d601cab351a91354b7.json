@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT max(created_at) AS \"sent_at\" FROM auth_codes WHERE user_id = $1 AND purpose = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent_at",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "12ca26975e9d4ccbd8961b70a91b91c88e354ee19ada28d601cab351a91354b7"
+}

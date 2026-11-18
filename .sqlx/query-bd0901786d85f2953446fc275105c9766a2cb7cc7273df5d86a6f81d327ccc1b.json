@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET default_branch = $3 WHERE id = $1 AND default_branch = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bd0901786d85f2953446fc275105c9766a2cb7cc7273df5d86a6f81d327ccc1b"
+}

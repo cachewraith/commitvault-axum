@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE auth_codes SET consumed_at = now() WHERE id = $1 AND consumed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4139f87e707f2a8f7012e4cd2b61d8c08c0be22444280eb4e82bbf36e407072"
+}

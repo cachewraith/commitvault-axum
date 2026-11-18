@@ -4,12 +4,15 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// A project with a `main` branch.
 async fn project(pool: &PgPool, slug: &str) -> Uuid {
-    sqlx::query_scalar("INSERT INTO projects (name, slug) VALUES ($1, $1) RETURNING id")
+    let id = sqlx::query_scalar("INSERT INTO projects (name, slug) VALUES ($1, $1) RETURNING id")
         .bind(slug)
         .fetch_one(pool)
         .await
-        .unwrap()
+        .unwrap();
+    sqlx::query("INSERT INTO branches (project_id, name) VALUES ($1, 'main')").bind(id).execute(pool).await.unwrap();
+    id
 }
 
 async fn environment(pool: &PgPool, project_id: Uuid, slug: &str) -> Uuid {
@@ -23,8 +26,9 @@ async fn environment(pool: &PgPool, project_id: Uuid, slug: &str) -> Uuid {
 
 async fn commit(pool: &PgPool, project_id: Uuid, hash: &str) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO commits (project_id, branch_name, commit_hash, short_hash, commit_message, commit_date)
-         VALUES ($1, 'main', $2, left($2, 7), 'msg', now()) RETURNING id",
+        "INSERT INTO commits (project_id, branch_id, commit_hash, short_hash, commit_message, commit_date)
+         VALUES ($1, (SELECT id FROM branches WHERE project_id = $1 AND name = 'main'), $2, left($2, 7), 'msg', now())
+         RETURNING id",
     )
     .bind(project_id)
     .bind(hash)
@@ -56,12 +60,42 @@ async fn commit_hash_is_unique_per_project(pool: PgPool) {
     commit(&pool, one, "aaaaaaa1").await;
     commit(&pool, two, "aaaaaaa1").await;
 
-    let err = sqlx::query("INSERT INTO commits (project_id, branch_name, commit_hash, short_hash, commit_message, commit_date) VALUES ($1, 'dev', 'aaaaaaa1', 'aaaaaaa', 'again', now())")
+    let err = sqlx::query("INSERT INTO commits (project_id, branch_id, commit_hash, short_hash, commit_message, commit_date) VALUES ($1, (SELECT id FROM branches WHERE project_id = $1), 'aaaaaaa1', 'aaaaaaa', 'again', now())")
         .bind(one)
         .execute(&pool)
         .await
         .unwrap_err();
     assert_eq!(constraint(&err), "commits_project_hash_key");
+}
+
+#[sqlx::test]
+async fn commits_cannot_use_a_branch_of_another_project(pool: PgPool) {
+    let one = project(&pool, "one").await;
+    let two = project(&pool, "two").await;
+    let err = sqlx::query(
+        "INSERT INTO commits (project_id, branch_id, commit_hash, short_hash, commit_message, commit_date)
+         VALUES ($1, (SELECT id FROM branches WHERE project_id = $2), 'aaaaaaa1', 'aaaaaaa', 'm', now())",
+    )
+    .bind(one)
+    .bind(two)
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(constraint(&err), "commits_branch_fkey");
+
+    // Branch names are unique per project, not globally.
+    let err = sqlx::query("INSERT INTO branches (project_id, name) VALUES ($1, 'main')")
+        .bind(one)
+        .execute(&pool)
+        .await
+        .unwrap_err();
+    assert_eq!(constraint(&err), "branches_project_name_key");
+
+    // A branch with commits cannot be deleted; the project still can.
+    commit(&pool, one, "bbbbbbb1").await;
+    let err = sqlx::query("DELETE FROM branches WHERE project_id = $1").bind(one).execute(&pool).await.unwrap_err();
+    assert_eq!(constraint(&err), "commits_branch_fkey");
+    sqlx::query("DELETE FROM projects WHERE id = $1").bind(one).execute(&pool).await.unwrap();
 }
 
 #[sqlx::test]
@@ -157,7 +191,7 @@ async fn check_constraints_reject_invalid_values(pool: PgPool) {
         assert_eq!(constraint(&err), expected, "{sql}");
     }
 
-    let err = sqlx::query("INSERT INTO commits (project_id, branch_name, commit_hash, short_hash, commit_message, commit_date) VALUES ($1, 'main', 'NOT-HEX', 'aaaaaaa', 'm', now())")
+    let err = sqlx::query("INSERT INTO commits (project_id, branch_id, commit_hash, short_hash, commit_message, commit_date) VALUES ($1, (SELECT id FROM branches WHERE project_id = $1), 'NOT-HEX', 'aaaaaaa', 'm', now())")
         .bind(one)
         .execute(&pool)
         .await
@@ -233,7 +267,8 @@ async fn expected_indexes_exist(pool: PgPool) {
     for expected in [
         "projects_slug_key",
         "commits_project_hash_key",
-        "commits_project_branch_idx",
+        "commits_branch_date_idx",
+        "branches_project_name_key",
         "commits_project_date_idx",
         "deployments_project_env_date_idx",
         "deployments_commit_idx",

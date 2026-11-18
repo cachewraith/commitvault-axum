@@ -15,6 +15,11 @@ fn spec_documents_every_endpoint_group() {
         "/api/v1/auth/logout",
         "/api/v1/auth/me",
         "/api/v1/auth/password",
+        "/api/v1/auth/options",
+        "/api/v1/auth/login/verify",
+        "/api/v1/auth/login/resend",
+        "/api/v1/auth/password/forgot",
+        "/api/v1/auth/password/reset",
         "/api/v1/dashboard",
         "/api/v1/projects",
         "/api/v1/projects/{id}",
@@ -24,6 +29,7 @@ fn spec_documents_every_endpoint_group() {
         "/api/v1/environments/{id}",
         "/api/v1/projects/{project_id}/commits",
         "/api/v1/projects/{project_id}/branches",
+        "/api/v1/branches/{id}",
         "/api/v1/commits",
         "/api/v1/commits/{id}",
         "/api/v1/projects/{project_id}/deployments",
@@ -45,13 +51,16 @@ fn spec_documents_every_endpoint_group() {
     }
 
     let operations: usize = paths.values().map(|item| item.as_object().unwrap().len()).sum();
-    assert_eq!(operations, 53, "update this count (and docs/API.md) when endpoints are added or removed");
+    assert_eq!(operations, 62, "update this count (and docs/API.md) when endpoints are added or removed");
 
     let schemas = spec["components"]["schemas"].as_object().unwrap();
     for schema in [
         "ErrorResponse",
         "ProjectResponse",
         "CommitResponse",
+        "BranchResponse",
+        "BranchDetailResponse",
+        "LoginResponse",
         "DeploymentResponse",
         "EnvironmentComparison",
         "NoteDetailResponse",

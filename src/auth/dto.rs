@@ -51,3 +51,59 @@ pub struct SessionResponse {
 pub struct CsrfTokenResponse {
     pub csrf_token: String,
 }
+
+/// Result of `POST /auth/login`.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum LoginResponse {
+    /// Signed in.
+    Authenticated(SessionResponse),
+    /// Password accepted. A code was emailed; send it to `POST /auth/login/verify`.
+    CodeRequired(CodeChallenge),
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CodeChallenge {
+    /// CSRF token of the pending session (use it for verify / resend).
+    pub csrf_token: String,
+    /// Masked address the code was sent to, e.g. `a•••@example.com`.
+    pub email_hint: String,
+    pub expires_at: DateTime<Utc>,
+    /// Earliest time `POST /auth/login/resend` will send another code.
+    pub resend_available_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize, Validate, ToSchema)]
+pub struct VerifyLoginCodeRequest {
+    /// The six-digit code from the email.
+    #[validate(custom(function = "crate::shared::validation::one_time_code"))]
+    #[serde(deserialize_with = "crate::shared::serde_helpers::trimmed")]
+    pub code: String,
+}
+
+#[derive(Deserialize, Validate, ToSchema)]
+pub struct ForgotPasswordRequest {
+    #[validate(length(min = 3, max = 254, message = "Enter your email address"))]
+    #[serde(deserialize_with = "crate::shared::serde_helpers::trimmed")]
+    pub email: String,
+}
+
+#[derive(Deserialize, Validate, ToSchema)]
+pub struct ResetPasswordRequest {
+    #[validate(length(min = 3, max = 254, message = "Enter your email address"))]
+    #[serde(deserialize_with = "crate::shared::serde_helpers::trimmed")]
+    pub email: String,
+    /// The six-digit code from the password reset email.
+    #[validate(custom(function = "crate::shared::validation::one_time_code"))]
+    #[serde(deserialize_with = "crate::shared::serde_helpers::trimmed")]
+    pub code: String,
+    #[validate(length(min = 12, max = 256, message = "Use between 12 and 256 characters"))]
+    pub new_password: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AuthOptionsResponse {
+    /// Outgoing email is configured: "Forgot password?" works and new
+    /// browsers are asked for an emailed code after the password.
+    pub email_enabled: bool,
+}

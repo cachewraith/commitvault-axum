@@ -2,9 +2,7 @@ use axum::{Json, extract::State, http::StatusCode};
 use uuid::Uuid;
 
 use super::{
-    dto::{
-        BranchSummary, CommitResponse, CreateCommitRequest, DeleteCommitQuery, ListCommitsQuery, UpdateCommitRequest,
-    },
+    dto::{CommitResponse, CreateCommitRequest, DeleteCommitQuery, ListCommitsQuery, UpdateCommitRequest},
     service,
 };
 use crate::{
@@ -48,7 +46,7 @@ pub async fn list_for_project(
         (status = 201, body = Data<CommitResponse>),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse, description = "Hash already recorded for this project"),
-        (status = 422, body = ErrorResponse),
+        (status = 422, body = ErrorResponse, description = "Invalid fields, or `branch_id` is not a branch of this project"),
     ))]
 pub async fn create(
     State(state): State<AppState>,
@@ -56,20 +54,6 @@ pub async fn create(
     ValidJson(request): ValidJson<CreateCommitRequest>,
 ) -> AppResult<(StatusCode, Json<Data<CommitResponse>>)> {
     Ok((StatusCode::CREATED, Data::json(service::create(&state.db, project_id, request).await?)))
-}
-
-/// List a project's branch names
-///
-/// Distinct branches seen on recorded commits, most recently used first
-/// (for autocompletion and filters).
-#[utoipa::path(get, path = "/projects/{project_id}/branches", tag = "commits",
-    params(("project_id" = Uuid, Path, description = "Project id")),
-    responses((status = 200, body = Data<Vec<BranchSummary>>), (status = 404, body = ErrorResponse)))]
-pub async fn branches(
-    State(state): State<AppState>,
-    Path(project_id): Path<Uuid>,
-) -> AppResult<Json<Data<Vec<BranchSummary>>>> {
-    Ok(Data::json(service::branches(&state.db, project_id).await?))
 }
 
 /// Get a commit

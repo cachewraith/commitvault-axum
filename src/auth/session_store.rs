@@ -4,12 +4,16 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, postgres::types::PgInterval};
 use tower_sessions::{
     SessionStore,
     session::{Id, Record},
     session_store::{Error, Result},
 };
+
+/// How far the stored expiry may lag behind the sliding expiry before an
+/// otherwise unchanged session row is rewritten.
+const EXPIRY_WRITE_SLACK: PgInterval = PgInterval { months: 0, days: 0, microseconds: 10 * 60 * 1_000_000 };
 
 #[derive(Debug, Clone)]
 pub struct PgSessionStore {
@@ -27,7 +31,8 @@ impl PgSessionStore {
         Ok(result.rows_affected())
     }
 
-    /// Periodically purges expired sessions until the task is aborted.
+    /// Periodically purges expired sessions (and expired one-time codes and
+    /// trusted browsers) until the task is aborted.
     pub async fn run_cleanup(self, every: std::time::Duration) {
         let mut interval = tokio::time::interval(every);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -37,6 +42,9 @@ impl PgSessionStore {
                 Ok(0) => {}
                 Ok(count) => tracing::debug!(count, "purged expired sessions"),
                 Err(err) => tracing::warn!(error = %err, "failed to purge expired sessions"),
+            }
+            if let Err(err) = super::repository::purge_expired(&self.pool).await {
+                tracing::warn!(error = %err, "failed to purge expired sign-in codes");
             }
         }
     }
@@ -80,13 +88,28 @@ impl SessionStore for PgSessionStore {
         }
     }
 
+    /// Called on every response (sliding expiry). Rewriting an unchanged row
+    /// each time turned every read request into a write — a WAL flush per
+    /// page view on a small server — so the row is only written when its data
+    /// changed, its expiry moved earlier, or the stored expiry has fallen more
+    /// than `EXPIRY_WRITE_SLACK` behind. A session may therefore end up to
+    /// that much earlier than its cookie says; with a lifetime of days that is
+    /// immaterial.
     async fn save(&self, record: &Record) -> Result<()> {
         sqlx::query!(
-            "INSERT INTO sessions (id, data, expires_at) VALUES ($1, $2, $3)
+            "WITH changed AS (
+                 UPDATE sessions SET data = $2, expires_at = $3
+                 WHERE id = $1
+                   AND (data IS DISTINCT FROM $2 OR expires_at > $3 OR expires_at < $3 - $4::interval)
+             )
+             INSERT INTO sessions (id, data, expires_at)
+             SELECT $1::text, $2::jsonb, $3::timestamptz
+             WHERE NOT EXISTS (SELECT 1 FROM sessions WHERE id = $1)
              ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, expires_at = EXCLUDED.expires_at",
             record.id.to_string(),
             encode(record)?,
             expires_at(record)?,
+            EXPIRY_WRITE_SLACK,
         )
         .execute(&self.pool)
         .await

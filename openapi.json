@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "CommitVault API",
-    "description": "REST API of CommitVault, a personal workspace for recording commits, deployments, environments, releases and technical notes.\n\nAll endpoints except `/health`, `/auth/csrf`, `/auth/login` and `/auth/logout` require the session cookie. Every POST, PUT, PATCH and DELETE request must also send the session's CSRF token in the `X-CSRF-Token` header.",
+    "description": "REST API of CommitVault, a personal workspace for recording commits, deployments, environments, releases and technical notes.\n\nAll endpoints except `/health` and the sign-in endpoints (`/auth/csrf`, `/auth/options`, `/auth/login*`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/reset`) require the session cookie. Every POST, PUT, PATCH and DELETE request must also send the session's CSRF token in the `X-CSRF-Token` header.",
     "license": {
       "name": ""
     },
@@ -36,6 +36,7 @@
           "auth"
         ],
         "summary": "Sign in",
+        "description": "With outgoing email configured, a browser that has not completed the code\nstep before gets `status: \"code_required\"`: a six-digit code was emailed\nand must be sent to `POST /auth/login/verify`. Browsers that did complete\nit within the last 90 days (device cookie) are signed in directly.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -52,7 +53,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Data_SessionResponse"
+                  "$ref": "#/components/schemas/Data_LoginResponse"
                 }
               }
             }
@@ -78,6 +79,108 @@
           },
           "429": {
             "description": "Too many failed attempts; see `Retry-After`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/resend": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Send a new sign-in code",
+        "description": "The previous code stops working. At most one code per minute.",
+        "operationId": "resend_login_code",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_CodeChallenge"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`sign_in_expired`: no pending sign-in; start again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too soon; see `Retry-After`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/verify": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Enter the emailed sign-in code",
+        "description": "Completes a sign-in that answered `code_required`. On success the browser\nis remembered (device cookie) and will not be asked again for 90 days.",
+        "operationId": "verify_login_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyLoginCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_SessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`sign_in_expired`: no pending sign-in; start again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Wrong or expired code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many wrong codes; see `Retry-After`",
             "content": {
               "application/json": {
                 "schema": {
@@ -131,6 +234,27 @@
         }
       }
     },
+    "/api/v1/auth/options": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign-in options",
+        "description": "Tells the login screen whether email-based features are available.",
+        "operationId": "options",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_AuthOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/password": {
       "post": {
         "tags": [
@@ -172,6 +296,262 @@
         }
       }
     },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Request a password reset code",
+        "description": "Always answers 202, whether or not the address belongs to the account; if\nit does, a code is emailed (at most one per minute).",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {},
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see `Retry-After`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`email_unavailable`: outgoing email is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Reset the password with an emailed code",
+        "description": "Signs out every session and forgets every trusted browser.",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "422": {
+            "description": "Invalid fields, or wrong or expired code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many wrong codes; see `Retry-After`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/branches/{id}": {
+      "get": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Get a branch",
+        "description": "Includes, per environment, the latest deployment record of a commit on\nthis branch.",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Branch id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_BranchDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Delete a branch",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Branch id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cascade",
+            "in": "query",
+            "description": "Also delete the branch's commits and their deployment records. Without\nit, deleting a branch that still has commits fails with 409.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Has commits and `cascade` was not set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Update a branch",
+        "description": "Renaming the project's default branch also updates the project's\n`default_branch`.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Branch id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Data_BranchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already used in this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/commits": {
       "get": {
         "tags": [
@@ -192,19 +572,20 @@
           {
             "name": "search",
             "in": "query",
-            "description": "Matches message, description, branch, author and hash prefix.",
+            "description": "Matches message, description, branch name, author and hash prefix.",
             "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "branch",
+            "name": "branch_id",
             "in": "query",
-            "description": "Exact branch name.",
+            "description": "Commits of this branch.",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -1615,11 +1996,96 @@
     "/api/v1/projects/{project_id}/branches": {
       "get": {
         "tags": [
-          "commits"
+          "branches"
         ],
-        "summary": "List a project's branch names",
-        "description": "Distinct branches seen on recorded commits, most recently used first\n(for autocompletion and filters).",
-        "operationId": "branches",
+        "summary": "List a project's branches",
+        "description": "Each branch carries its commit count and latest commit date. Default\norder: most recent commit first.",
+        "operationId": "list_for_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Matches the branch name.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/BranchSort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Defaults to `asc` for `name`, `desc` otherwise.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Paginated_BranchResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Create a branch",
+        "operationId": "create",
         "parameters": [
           {
             "name": "project_id",
@@ -1632,17 +2098,46 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Data_Vec_BranchSummary"
+                  "$ref": "#/components/schemas/Data_BranchResponse"
                 }
               }
             }
           },
           "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Name already used in this project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1685,19 +2180,20 @@
           {
             "name": "search",
             "in": "query",
-            "description": "Matches message, description, branch, author and hash prefix.",
+            "description": "Matches message, description, branch name, author and hash prefix.",
             "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "branch",
+            "name": "branch_id",
             "in": "query",
-            "description": "Exact branch name.",
+            "description": "Commits of this branch.",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -1874,6 +2370,7 @@
             }
           },
           "422": {
+            "description": "Invalid fields, or `branch_id` is not a branch of this project",
             "content": {
               "application/json": {
                 "schema": {
@@ -3260,26 +3757,158 @@
   },
   "components": {
     "schemas": {
-      "BranchSummary": {
+      "AuthOptionsResponse": {
         "type": "object",
         "required": [
+          "email_enabled"
+        ],
+        "properties": {
+          "email_enabled": {
+            "type": "boolean",
+            "description": "Outgoing email is configured: \"Forgot password?\" works and new\nbrowsers are asked for an emailed code after the password."
+          }
+        }
+      },
+      "BranchDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BranchResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "environments"
+            ],
+            "properties": {
+              "environments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BranchEnvironment"
+                },
+                "description": "Environments with at least one deployment record of a commit on this\nbranch, in display order. An environment that is missing here has no\nrecord — which does not mean the branch was never deployed there."
+              }
+            }
+          }
+        ],
+        "description": "A branch together with where its commits have recorded deployments."
+      },
+      "BranchEnvironment": {
+        "type": "object",
+        "required": [
+          "id",
           "name",
+          "slug",
+          "color",
+          "deployment_count",
+          "latest_deployment"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "deployment_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Deployment records of this branch's commits in the environment."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "latest_deployment": {
+            "$ref": "#/components/schemas/DeploymentBrief",
+            "description": "The most recent of those records."
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "BranchRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "BranchResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "project",
+          "name",
+          "is_default",
           "commit_count",
-          "last_commit_at"
+          "created_at",
+          "updated_at"
         ],
         "properties": {
           "commit_count": {
             "type": "integer",
             "format": "int64"
           },
-          "last_commit_at": {
+          "created_at": {
             "type": "string",
             "format": "date-time"
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "The branch is the project's `default_branch`."
+          },
+          "last_commit_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of the most recent commit recorded on this branch."
+          },
           "name": {
             "type": "string"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectRef"
+          },
+          "project_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
+      },
+      "BranchSort": {
+        "type": "string",
+        "enum": [
+          "last_commit",
+          "name",
+          "created_at"
+        ]
       },
       "ChangePasswordRequest": {
         "type": "object",
@@ -3293,6 +3922,34 @@
           },
           "new_password": {
             "type": "string"
+          }
+        }
+      },
+      "CodeChallenge": {
+        "type": "object",
+        "required": [
+          "csrf_token",
+          "email_hint",
+          "expires_at",
+          "resend_available_at"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string",
+            "description": "CSRF token of the pending session (use it for verify / resend)."
+          },
+          "email_hint": {
+            "type": "string",
+            "description": "Masked address the code was sent to, e.g. `a•••@example.com`."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resend_available_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest time `POST /auth/login/resend` will send another code."
           }
         }
       },
@@ -3386,7 +4043,8 @@
           "id",
           "project_id",
           "project",
-          "branch_name",
+          "branch_id",
+          "branch",
           "commit_hash",
           "short_hash",
           "commit_message",
@@ -3405,8 +4063,12 @@
               "null"
             ]
           },
-          "branch_name": {
-            "type": "string"
+          "branch": {
+            "$ref": "#/components/schemas/BranchRef"
+          },
+          "branch_id": {
+            "type": "string",
+            "format": "uuid"
           },
           "commit_date": {
             "type": "string",
@@ -3558,10 +4220,28 @@
           }
         }
       },
+      "CreateBranchRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Git-style branch name, unique inside the project."
+          }
+        }
+      },
       "CreateCommitRequest": {
         "type": "object",
         "required": [
-          "branch_name",
+          "branch_id",
           "commit_hash",
           "commit_message",
           "commit_date"
@@ -3573,8 +4253,10 @@
               "null"
             ]
           },
-          "branch_name": {
-            "type": "string"
+          "branch_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A branch of the same project (`POST /projects/{project_id}/branches` creates one)."
           },
           "commit_date": {
             "type": "string",
@@ -4039,6 +4721,160 @@
           }
         }
       },
+      "Data_AuthOptionsResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "email_enabled"
+            ],
+            "properties": {
+              "email_enabled": {
+                "type": "boolean",
+                "description": "Outgoing email is configured: \"Forgot password?\" works and new\nbrowsers are asked for an emailed code after the password."
+              }
+            }
+          }
+        }
+      },
+      "Data_BranchDetailResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BranchResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "environments"
+                ],
+                "properties": {
+                  "environments": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/BranchEnvironment"
+                    },
+                    "description": "Environments with at least one deployment record of a commit on this\nbranch, in display order. An environment that is missing here has no\nrecord — which does not mean the branch was never deployed there."
+                  }
+                }
+              }
+            ],
+            "description": "A branch together with where its commits have recorded deployments."
+          }
+        }
+      },
+      "Data_BranchResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "project_id",
+              "project",
+              "name",
+              "is_default",
+              "commit_count",
+              "created_at",
+              "updated_at"
+            ],
+            "properties": {
+              "commit_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "is_default": {
+                "type": "boolean",
+                "description": "The branch is the project's `default_branch`."
+              },
+              "last_commit_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Date of the most recent commit recorded on this branch."
+              },
+              "name": {
+                "type": "string"
+              },
+              "project": {
+                "$ref": "#/components/schemas/ProjectRef"
+              },
+              "project_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "Data_CodeChallenge": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "csrf_token",
+              "email_hint",
+              "expires_at",
+              "resend_available_at"
+            ],
+            "properties": {
+              "csrf_token": {
+                "type": "string",
+                "description": "CSRF token of the pending session (use it for verify / resend)."
+              },
+              "email_hint": {
+                "type": "string",
+                "description": "Masked address the code was sent to, e.g. `a•••@example.com`."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "resend_available_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Earliest time `POST /auth/login/resend` will send another code."
+              }
+            }
+          }
+        }
+      },
       "Data_CommitResponse": {
         "type": "object",
         "required": [
@@ -4051,7 +4887,8 @@
               "id",
               "project_id",
               "project",
-              "branch_name",
+              "branch_id",
+              "branch",
               "commit_hash",
               "short_hash",
               "commit_message",
@@ -4070,8 +4907,12 @@
                   "null"
                 ]
               },
-              "branch_name": {
-                "type": "string"
+              "branch": {
+                "$ref": "#/components/schemas/BranchRef"
+              },
+              "branch_id": {
+                "type": "string",
+                "format": "uuid"
               },
               "commit_date": {
                 "type": "string",
@@ -4490,6 +5331,65 @@
           }
         }
       },
+      "Data_LoginResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "oneOf": [
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/SessionResponse",
+                    "description": "Signed in."
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "status"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "authenticated"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "description": "Signed in."
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CodeChallenge",
+                    "description": "Password accepted. A code was emailed; send it to `POST /auth/login/verify`."
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "status"
+                    ],
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "code_required"
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "description": "Password accepted. A code was emailed; send it to `POST /auth/login/verify`."
+              }
+            ],
+            "description": "Result of `POST /auth/login`."
+          }
+        }
+      },
       "Data_NoteDetailResponse": {
         "type": "object",
         "required": [
@@ -4764,38 +5664,6 @@
               },
               "usage": {
                 "$ref": "#/components/schemas/TagUsage"
-              }
-            }
-          }
-        }
-      },
-      "Data_Vec_BranchSummary": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "name",
-                "commit_count",
-                "last_commit_at"
-              ],
-              "properties": {
-                "commit_count": {
-                  "type": "integer",
-                  "format": "int64"
-                },
-                "last_commit_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "name": {
-                  "type": "string"
-                }
               }
             }
           }
@@ -5245,6 +6113,17 @@
           }
         }
       },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "type": "object",
         "required": [
@@ -5271,6 +6150,57 @@
             "description": "Not trimmed: whitespace can be part of a passphrase."
           }
         }
+      },
+      "LoginResponse": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionResponse",
+                "description": "Signed in."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "authenticated"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Signed in."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CodeChallenge",
+                "description": "Password accepted. A code was emailed; send it to `POST /auth/login/verify`."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "code_required"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Password accepted. A code was emailed; send it to `POST /auth/login/verify`."
+          }
+        ],
+        "description": "Result of `POST /auth/login`."
       },
       "NoteCategory": {
         "type": "object",
@@ -5410,6 +6340,80 @@
           }
         }
       },
+      "Paginated_BranchResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "project_id",
+                "project",
+                "name",
+                "is_default",
+                "commit_count",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "commit_count": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "is_default": {
+                  "type": "boolean",
+                  "description": "The branch is the project's `default_branch`."
+                },
+                "last_commit_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "Date of the most recent commit recorded on this branch."
+                },
+                "name": {
+                  "type": "string"
+                },
+                "project": {
+                  "$ref": "#/components/schemas/ProjectRef"
+                },
+                "project_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          }
+        }
+      },
       "Paginated_CommitResponse": {
         "type": "object",
         "required": [
@@ -5425,7 +6429,8 @@
                 "id",
                 "project_id",
                 "project",
-                "branch_name",
+                "branch_id",
+                "branch",
                 "commit_hash",
                 "short_hash",
                 "commit_message",
@@ -5444,8 +6449,12 @@
                     "null"
                   ]
                 },
-                "branch_name": {
-                  "type": "string"
+                "branch": {
+                  "$ref": "#/components/schemas/BranchRef"
+                },
+                "branch_id": {
+                  "type": "string",
+                  "format": "uuid"
                 },
                 "commit_date": {
                   "type": "string",
@@ -6346,6 +7355,26 @@
           }
         }
       },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "code",
+          "new_password"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The six-digit code from the password reset email."
+          },
+          "email": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        }
+      },
       "SearchHit": {
         "type": "object",
         "required": [
@@ -6615,6 +7644,24 @@
           }
         }
       },
+      "UpdateBranchRequest": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Renaming moves every commit of the branch along with it."
+          }
+        }
+      },
       "UpdateCommitRequest": {
         "type": "object",
         "properties": {
@@ -6624,11 +7671,13 @@
               "null"
             ]
           },
-          "branch_name": {
+          "branch_id": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "format": "uuid",
+            "description": "Move the commit to another branch of the same project."
           },
           "commit_date": {
             "type": [
@@ -6981,6 +8030,18 @@
             "format": "uuid"
           }
         }
+      },
+      "VerifyLoginCodeRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The six-digit code from the email."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -7014,6 +8075,10 @@
     {
       "name": "environments",
       "description": "Deployment targets of a project"
+    },
+    {
+      "name": "branches",
+      "description": "Branches of a project"
     },
     {
       "name": "commits",

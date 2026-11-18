@@ -9,7 +9,10 @@ use super::{
 };
 use crate::{
     errors::{AppError, AppResult},
-    modules::tags::{self, models::TagTarget},
+    modules::{
+        branches,
+        tags::{self, models::TagTarget},
+    },
     shared::{
         pagination::{Page, SortOrder},
         response::Paginated,
@@ -51,6 +54,7 @@ pub async fn create(pool: &PgPool, request: CreateProjectRequest) -> AppResult<P
         None => unique_slug(pool, &request.name).await?,
     };
 
+    let default_branch = request.default_branch.as_deref().unwrap_or("main");
     let mut tx = pool.begin().await?;
     let id = repository::insert(
         &mut tx,
@@ -59,10 +63,12 @@ pub async fn create(pool: &PgPool, request: CreateProjectRequest) -> AppResult<P
             slug: &slug,
             description: request.description.as_deref(),
             repository_url: request.repository_url.as_deref(),
-            default_branch: request.default_branch.as_deref().unwrap_or("main"),
+            default_branch,
         },
     )
     .await?;
+    // A new project starts with its default branch, ready for the first commit.
+    branches::service::ensure_named(&mut tx, id, default_branch).await?;
     if let Some(tag_ids) = &request.tag_ids {
         tags::service::set_tags(&mut tx, TagTarget::Project, id, tag_ids).await?;
     }
@@ -86,7 +92,10 @@ pub async fn update(pool: &PgPool, id: Uuid, request: UpdateProjectRequest) -> A
     if let Some(repository_url) = request.repository_url {
         project.repository_url = repository_url;
     }
-    if let Some(default_branch) = request.default_branch {
+    if let Some(default_branch) = request.default_branch
+        && default_branch != project.default_branch
+    {
+        branches::service::ensure_named(&mut tx, id, &default_branch).await?;
         project.default_branch = default_branch;
     }
     if let Some(status) = request.status
